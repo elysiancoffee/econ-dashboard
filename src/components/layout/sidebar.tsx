@@ -14,6 +14,7 @@ import {
   LayoutTemplate,
   LogOut,
   ChevronLeft,
+  ImageIcon,
 } from "lucide-react";
 
 import { useApp } from "@/lib/store";
@@ -23,6 +24,8 @@ const navItems = [
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Staff", href: "/staff", icon: Users },
   { name: "Black Chips", href: "/black-chips", icon: HandCoins },
+  { name: "Image Host", href: "/img-host", icon: ImageIcon },
+  { name: "Gallery", href: "/gallery", icon: ImageIcon },
   { name: "Templates", href: "/templates", icon: LayoutTemplate },
   { name: "Logs", href: "/logs", icon: ScrollText },
   { name: "Settings", href: "/settings", icon: Settings },
