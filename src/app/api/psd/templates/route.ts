@@ -109,13 +109,18 @@ export async function POST(request: NextRequest) {
 
     let psd;
     try {
-      psd = readPsd(buffer, { skipImageData: true, skipThumbnail: true });
+      psd = readPsd(buffer, {
+        skipLayerImageData: true,
+        skipCompositeImageData: true,
+        skipThumbnail: true,
+      });
     } catch (err) {
       console.error("PSD parsing error:", err);
+      const detail = err instanceof Error ? err.message : String(err);
       return NextResponse.json(
         {
           success: false,
-          message: "Could not parse PSD file structure.",
+          message: `Could not parse PSD file structure (${detail}). Ensure it is a valid .psd document.`,
         },
         { status: 400 }
       );

@@ -82,5 +82,13 @@ export const staffProgress = pgTable("staff_progress", {
     .references(() => boards.id, { onDelete: "cascade" }),
   progressPercentage: integer("progress_percentage").notNull().default(0),
   totalTasksCompleted : integer("total_tasks_completed").notNull().default(0),
-  
+});
+
+export const shortcuts = pgTable("shortcuts", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  url: text("url").notNull(),
 });

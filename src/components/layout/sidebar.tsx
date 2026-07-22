@@ -15,6 +15,8 @@ import {
   LogOut,
   ChevronLeft,
   ImageIcon,
+  Wand2,
+  ImageUp,
 } from "lucide-react";
 
 import { useApp } from "@/lib/store";
@@ -22,11 +24,11 @@ import { useApp } from "@/lib/store";
 const navItems = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
-  { name: "Staff", href: "/staff", icon: Users },
   { name: "Black Chips", href: "/black-chips", icon: HandCoins },
-  { name: "Image Host", href: "/img-host", icon: ImageIcon },
+  { name: "Image Host", href: "/img-host", icon: ImageUp },
   { name: "Gallery", href: "/gallery", icon: ImageIcon },
   { name: "Templates", href: "/templates", icon: LayoutTemplate },
+  { name: "PSD Editor", href: "/psd-editor", icon: Wand2 },
   { name: "Logs", href: "/logs", icon: ScrollText },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
@@ -45,7 +47,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Backdrop for mobile */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden transition-opacity duration-300"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden transition-opacity duration-300"
           onClick={onClose}
         />
       )}
@@ -53,16 +55,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       <aside
         className={cn(
           "w-64 border-r bg-sidebar flex-shrink-0 flex flex-col min-h-screen",
-          "fixed inset-y-0 left-0 z-50 md:sticky md:top-0",
+          "fixed inset-y-0 left-0 z-50 lg:sticky lg:top-0",
           "transition-transform duration-300 ease-in-out",
-          isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
         <div className="h-16 flex items-center justify-between px-6 border-b">
           <span className="text-xl font-bold tracking-tight">ECON <span className="text-muted-foreground text-sm font-normal">Inner Circle</span></span>
           <button
             onClick={onClose}
-            className="md:hidden p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            className="lg:hidden p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -89,6 +91,20 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             </Link>
           );
         })}
+        {currentUser.role === "Boss" && (
+          <Link
+            href="/salary"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+              pathname === "/salary"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
+            <span>Salary</span>
+          </Link>
+        )}
       </nav>
       
       <div className="p-4 border-t space-y-2">

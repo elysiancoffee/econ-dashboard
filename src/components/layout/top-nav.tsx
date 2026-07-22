@@ -28,7 +28,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
           variant="ghost"
           size="icon"
           onClick={onMenuClick}
-          className="md:hidden rounded-full text-muted-foreground hover:text-foreground flex-shrink-0"
+          className="lg:hidden rounded-full text-muted-foreground hover:text-foreground flex-shrink-0"
         >
           <Menu className="h-5 w-5" />
         </Button>
@@ -54,7 +54,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
             <DropdownMenuTrigger render={
               <Button variant="outline" size="sm" className="flex items-center gap-2 rounded-full px-3">
                 <UserCheck className="h-4 w-4 text-muted-foreground" />
-                <span className="hidden md:inline">Switch Role: </span>
+                <span className="hidden lg:inline">Switch Role: </span>
                 <strong className="text-primary">{currentUser.role}</strong>
               </Button>
             } />

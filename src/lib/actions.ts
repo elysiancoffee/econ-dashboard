@@ -5,14 +5,15 @@ import * as schema from "./db/schema";
 import { eq } from "drizzle-orm";
 
 export async function fetchInitialData() {
-  const [users, boards, tasks, submissions, logs] = await Promise.all([
+  const [users, boards, tasks, submissions, logs, shortcuts] = await Promise.all([
     db.select().from(schema.users),
     db.select().from(schema.boards),
     db.select().from(schema.tasks),
     db.select().from(schema.submissions),
     db.select().from(schema.logs),
+    db.select().from(schema.shortcuts),
   ]);
-  return { users, boards, tasks, submissions, logs };
+  return { users, boards, tasks, submissions, logs, shortcuts };
 }
 
 export async function dbAddUser(username: string, role: string, passwordHash: string) {
@@ -156,4 +157,19 @@ export async function dbAddLog(action: string, uid: string, username: string) {
     timestamp: new Date().toISOString(),
   });
   return id;
+}
+
+export async function dbAddShortcut(userId: string, title: string, url: string) {
+  const id = `s-${Date.now()}`;
+  await db.insert(schema.shortcuts).values({
+    id,
+    userId,
+    title,
+    url,
+  });
+  return id;
+}
+
+export async function dbDeleteShortcut(id: string) {
+  await db.delete(schema.shortcuts).where(eq(schema.shortcuts.id, id));
 }

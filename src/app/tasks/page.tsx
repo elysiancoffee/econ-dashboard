@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useApp, Task, Board, Role } from "@/lib/store";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar, LayoutGrid, List, Plus, Trash2, Edit, AlertCircle, MessageSquare, Repeat, ChevronLeft, ChevronRight, Copy } from "lucide-react";
 import { toast } from "sonner";
-import { UserDropdown } from "@/components/ui/user-dropdown";
+import { CalendarPicker } from "@/components/ui/calendar-picker";
+import { MultiUserDropdown } from "@/components/ui/multi-user-dropdown";
 
 export default function TasksPage() {
   const { 
@@ -33,6 +35,40 @@ export default function TasksPage() {
 
   const [activeBoardId, setActiveBoardId] = useState<string>(boards[0]?.id || "");
   const [view, setView] = useState<"kanban" | "table" | "broader" | "calendar">("kanban");
+  const [tableRange, setTableRange] = useState<"1" | "3" | "6" | "12">("1");
+  const [sortField, setSortField] = useState<"title" | "priority" | "status" | "dueDate" | "assignee" | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+  const handleSort = (field: "title" | "priority" | "status" | "dueDate" | "assignee") => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  // Load user's default view setting
+  useEffect(() => {
+    if (currentUser?.id) {
+      const saved = localStorage.getItem(`default_task_view_${currentUser.id}`);
+      if (saved && (saved === "kanban" || saved === "table" || saved === "calendar")) {
+        setView(saved as any);
+      }
+    }
+  }, [currentUser]);
+
+  // Sync activeBoardId when boards load or change
+  useEffect(() => {
+    if (boards.length > 0) {
+      const exists = boards.some((b) => b.id === activeBoardId);
+      if (!activeBoardId || !exists) {
+        setActiveBoardId(boards[0].id);
+      }
+    } else {
+      setActiveBoardId("");
+    }
+  }, [boards, activeBoardId]);
   
   // Repeat options states
   const [taskRepeat, setTaskRepeat] = useState<string>("none"); // "none" | "daily" | "weekly" | "biweekly" | "monthly" | "yearly"
@@ -45,6 +81,121 @@ export default function TasksPage() {
 
   // Calendar active date month
   const [calendarDate, setCalendarDate] = useState(() => new Date());
+
+  // Scroll indicators state for the board selector tabs
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const kanbanContainerRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+
+  // Custom hook to enable drag-to-scroll interactivity
+  const useDragToScroll = (ref: React.RefObject<HTMLDivElement | null>) => {
+    useEffect(() => {
+      const el = ref.current;
+      if (!el) return;
+
+      let isDown = false;
+      let startX = 0;
+      let scrollLeftVal = 0;
+
+      const handleMouseDown = (e: MouseEvent) => {
+        if (e.button !== 0) return;
+        const target = e.target as HTMLElement;
+        if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('textarea')) {
+          return;
+        }
+
+        isDown = true;
+        startX = e.pageX - el.offsetLeft;
+        scrollLeftVal = el.scrollLeft;
+        isDragging.current = false;
+      };
+
+      const handleMouseLeave = () => {
+        isDown = false;
+      };
+
+      const handleMouseUp = () => {
+        isDown = false;
+      };
+
+      const handleMouseMove = (e: MouseEvent) => {
+        if (!isDown) return;
+        const x = e.pageX - el.offsetLeft;
+        const walk = (x - startX) * 1.5;
+        if (Math.abs(walk) > 5) {
+          isDragging.current = true;
+          el.scrollLeft = scrollLeftVal - walk;
+        }
+      };
+
+      el.addEventListener('mousedown', handleMouseDown);
+      el.addEventListener('mouseleave', handleMouseLeave);
+      el.addEventListener('mouseup', handleMouseUp);
+      el.addEventListener('mousemove', handleMouseMove);
+
+      return () => {
+        el.removeEventListener('mousedown', handleMouseDown);
+        el.removeEventListener('mouseleave', handleMouseLeave);
+        el.removeEventListener('mouseup', handleMouseUp);
+        el.removeEventListener('mousemove', handleMouseMove);
+      };
+    }, [ref]);
+  };
+
+  // Enable drag to scroll for board tabs and kanban columns
+  useDragToScroll(scrollRef);
+  useDragToScroll(kanbanContainerRef);
+  const [showLeftBlur, setShowLeftBlur] = useState(false);
+  const [showRightBlur, setShowRightBlur] = useState(false);
+
+  const checkScroll = () => {
+    if (scrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+      setShowLeftBlur(scrollLeft > 2);
+      setShowRightBlur(scrollLeft + clientWidth < scrollWidth - 2);
+    }
+  };
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) {
+      checkScroll();
+      const resizeObserver = new ResizeObserver(() => {
+        checkScroll();
+      });
+      resizeObserver.observe(el);
+
+      el.addEventListener("scroll", checkScroll);
+      window.addEventListener("resize", checkScroll);
+      return () => {
+        resizeObserver.disconnect();
+        el.removeEventListener("scroll", checkScroll);
+        window.removeEventListener("resize", checkScroll);
+      };
+    }
+  }, [boards]);
+
+  const getMaskStyle = () => {
+    if (showLeftBlur && showRightBlur) {
+      return {
+        WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 24px, black calc(100% - 24px), transparent 100%)",
+        maskImage: "linear-gradient(to right, transparent 0%, black 24px, black calc(100% - 24px), transparent 100%)",
+      };
+    }
+    if (showLeftBlur) {
+      return {
+        WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 24px, black 100%)",
+        maskImage: "linear-gradient(to right, transparent 0%, black 24px, black 100%)",
+      };
+    }
+    if (showRightBlur) {
+      return {
+        WebkitMaskImage: "linear-gradient(to right, black 0%, black calc(100% - 24px), transparent 100%)",
+        maskImage: "linear-gradient(to right, black 0%, black calc(100% - 24px), transparent 100%)",
+      };
+    }
+    return {};
+  };
 
   // Board form states
   const [newBoardName, setNewBoardName] = useState("");
@@ -63,10 +214,13 @@ export default function TasksPage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDesc, setTaskDesc] = useState("");
-  const [taskAssignee, setTaskAssignee] = useState("");
+  const [taskAssignees, setTaskAssignees] = useState<string[]>([]);
+  const [selectedAssigneeRoles, setSelectedAssigneeRoles] = useState<Role[]>([]);
   const [taskPriority, setTaskPriority] = useState<Task["priority"]>("Medium");
   const [taskStatus, setTaskStatus] = useState<Task["status"]>("Not Started");
   const [taskDueDate, setTaskDueDate] = useState("");
+  const [noDeadline, setNoDeadline] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Helper for generating next due date
   const getNextDueDate = (dateStr: string, frequency: string): string => {
@@ -164,11 +318,21 @@ export default function TasksPage() {
   // Dynamic filter based on view
   let activeTasks = boardTasks;
 
-  if (view === "kanban" || view === "table") {
+  if (view === "kanban") {
     activeTasks = boardTasks.filter((t) => {
       if (!t.dueDate) return false;
       const d = new Date(t.dueDate + "T00:00:00");
       return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    });
+  } else if (view === "table") {
+    const months = Number(tableRange);
+    const startOfCurrentMonth = new Date(currentYear, currentMonth, 1);
+    const endOfRange = new Date(currentYear, currentMonth + months, 0);
+    
+    activeTasks = boardTasks.filter((t) => {
+      if (!t.dueDate) return false;
+      const d = new Date(t.dueDate + "T00:00:00");
+      return d >= startOfCurrentMonth && d <= endOfRange;
     });
   } else if (view === "broader") {
     const startOfCurrentMonth = new Date(currentYear, currentMonth, 1);
@@ -190,6 +354,46 @@ export default function TasksPage() {
     });
   }
 
+  const sortedTasks = [...activeTasks].sort((a, b) => {
+    if (!sortField) {
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return a.dueDate.localeCompare(b.dueDate);
+    }
+
+    let aValue: string = "";
+    let bValue: string = "";
+
+    if (sortField === "title") {
+      aValue = a.title.toLowerCase();
+      bValue = b.title.toLowerCase();
+    } else if (sortField === "priority") {
+      const priorityOrder = { Low: 1, Medium: 2, High: 3, Critical: 4 };
+      const aVal = priorityOrder[a.priority] || 0;
+      const bVal = priorityOrder[b.priority] || 0;
+      return sortDirection === "asc" ? aVal - bVal : bVal - aVal;
+    } else if (sortField === "status") {
+      aValue = a.status.toLowerCase();
+      bValue = b.status.toLowerCase();
+    } else if (sortField === "dueDate") {
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      aValue = a.dueDate;
+      bValue = b.dueDate;
+    } else if (sortField === "assignee") {
+      const uA = users.find((u) => u.id === a.assignedUserId);
+      const uB = users.find((u) => u.id === b.assignedUserId);
+      aValue = (uA?.username || "").toLowerCase();
+      bValue = (uB?.username || "").toLowerCase();
+    }
+
+    if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
   // Permission Check: Boss/Consigliere can manage boards and edit all tasks. Other roles have restrictions.
   const canManageBoards = currentUser.role === "Boss" || currentUser.role === "Consigliere";
 
@@ -209,7 +413,24 @@ export default function TasksPage() {
     setEditBoardName(activeBoard.name);
     setEditBoardRoles(activeBoard.allowedRoles || []);
     setEditBoardUsers(activeBoard.allowedUsers || []);
+    setShowDeleteConfirm(false);
     setIsEditBoardOpen(true);
+  };
+
+  const handleDeleteActiveBoard = () => {
+    if (!activeBoard) return;
+    deleteBoard(activeBoard.id);
+    
+    const remaining = boards.filter((b) => b.id !== activeBoard.id);
+    if (remaining.length > 0) {
+      setActiveBoardId(remaining[0].id);
+    } else {
+      setActiveBoardId("");
+    }
+    
+    toast.success(`Board "${activeBoard.name}" deleted successfully.`);
+    setIsEditBoardOpen(false);
+    setShowDeleteConfirm(false);
   };
 
   const handleSaveBoard = (e: React.FormEvent) => {
@@ -238,14 +459,42 @@ export default function TasksPage() {
     );
   };
 
+  const handleToggleAssigneeUser = (userId: string) => {
+    setTaskAssignees((prev) => 
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const handleToggleAssigneeRole = (role: Role) => {
+    const roleUsers = users.filter((u) => u.role === role).map((u) => u.id);
+    if (roleUsers.length === 0) return;
+
+    const isRoleSelected = selectedAssigneeRoles.includes(role);
+    if (isRoleSelected) {
+      setTaskAssignees((prev) => prev.filter((id) => !roleUsers.includes(id)));
+      setSelectedAssigneeRoles((prev) => prev.filter((r) => r !== role));
+    } else {
+      setTaskAssignees((prev) => {
+        const next = [...prev];
+        roleUsers.forEach((id) => {
+          if (!next.includes(id)) next.push(id);
+        });
+        return next;
+      });
+      setSelectedAssigneeRoles((prev) => [...prev, role]);
+    }
+  };
+
   const handleOpenCreateTask = () => {
     setEditingTask(null);
     setTaskTitle("");
     setTaskDesc("");
-    setTaskAssignee(users[0]?.id || "");
+    setTaskAssignees(users[0]?.id ? [users[0].id] : []);
+    setSelectedAssigneeRoles([]);
     setTaskPriority("Medium");
     setTaskStatus("Not Started");
     setTaskDueDate("");
+    setNoDeadline(false);
     setTaskRepeat("none");
     setRepeatEndType("count");
     setRepeatCount(10);
@@ -254,13 +503,16 @@ export default function TasksPage() {
   };
 
   const handleOpenEditTask = (task: Task) => {
+    if (isDragging.current) return;
     setEditingTask(task);
     setTaskTitle(task.title);
     setTaskDesc(task.description);
-    setTaskAssignee(task.assignedUserId);
+    setTaskAssignees([task.assignedUserId]);
+    setSelectedAssigneeRoles([]);
     setTaskPriority(task.priority);
     setTaskStatus(task.status);
-    setTaskDueDate(task.dueDate);
+    setTaskDueDate(task.dueDate || "");
+    setNoDeadline(!task.dueDate);
     setTaskRepeat(task.recurrence || "none");
     setRepeatEndType("count");
     setRepeatCount(10);
@@ -272,10 +524,12 @@ export default function TasksPage() {
     setEditingTask(null);
     setTaskTitle(task.title);
     setTaskDesc(task.description);
-    setTaskAssignee(task.assignedUserId);
+    setTaskAssignees([task.assignedUserId]);
+    setSelectedAssigneeRoles([]);
     setTaskPriority(task.priority);
     setTaskStatus(task.status);
-    setTaskDueDate(task.dueDate);
+    setTaskDueDate(task.dueDate || "");
+    setNoDeadline(!task.dueDate);
     setTaskRepeat(task.recurrence || "none");
     setRepeatEndType("count");
     setRepeatCount(10);
@@ -286,70 +540,95 @@ export default function TasksPage() {
   const handleSaveTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskTitle.trim()) return;
+    if (taskAssignees.length === 0) {
+      toast.error("Please assign this task to at least one person.");
+      return;
+    }
+
+    const finalDueDate = noDeadline ? "" : taskDueDate;
 
     if (editingTask) {
+      const [firstAssignee, ...otherAssignees] = taskAssignees;
       updateTask({
         ...editingTask,
         title: taskTitle,
         description: taskDesc,
-        assignedUserId: taskAssignee,
+        assignedUserId: firstAssignee,
         priority: taskPriority,
         status: taskStatus,
-        dueDate: taskDueDate,
+        dueDate: finalDueDate,
         recurrence: taskRepeat,
       });
-      toast.success("Task updated successfully.");
-    } else {
-      if (taskRepeat === "none") {
-        addTask({
+
+      if (otherAssignees.length > 0) {
+        const extraTasks = otherAssignees.map((userId) => ({
           boardId: activeBoardId,
           title: taskTitle,
           description: taskDesc,
-          assignedUserId: taskAssignee,
+          assignedUserId: userId,
           priority: taskPriority,
           status: taskStatus,
-          dueDate: taskDueDate,
+          dueDate: finalDueDate,
+          recurrence: taskRepeat,
+          recurrenceParentId: editingTask.recurrenceParentId,
+        }));
+        addTasks(extraTasks);
+      }
+      toast.success("Task updated successfully.");
+    } else {
+      if (taskRepeat === "none") {
+        const newTasks = taskAssignees.map((userId) => ({
+          boardId: activeBoardId,
+          title: taskTitle,
+          description: taskDesc,
+          assignedUserId: userId,
+          priority: taskPriority,
+          status: taskStatus,
+          dueDate: finalDueDate,
           recurrence: "none",
           recurrenceParentId: null,
-        });
-        toast.success("Task created successfully.");
+        }));
+        addTasks(newTasks);
+        toast.success(`Created ${newTasks.length} tasks successfully.`);
       } else {
         // Create repeating tasks
         const occurrences: Omit<Task, "id" | "commentsCount">[] = [];
         const parentId = `t-parent-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
         
-        let currentDueDate = taskDueDate || new Date().toISOString().split("T")[0];
-        let count = 0;
-        const maxOccurrences = repeatEndType === "count" ? Math.min(repeatCount, 50) : 50;
-        
-        while (count < maxOccurrences) {
-          if (repeatEndType === "date" && repeatEndDate && currentDueDate > repeatEndDate) {
-            break;
+        taskAssignees.forEach((userId) => {
+          let currentDueDate = finalDueDate || new Date().toISOString().split("T")[0];
+          let count = 0;
+          const maxOccurrences = repeatEndType === "count" ? Math.min(repeatCount, 50) : 50;
+          
+          while (count < maxOccurrences) {
+            if (repeatEndType === "date" && repeatEndDate && currentDueDate > repeatEndDate) {
+              break;
+            }
+            
+            occurrences.push({
+              boardId: activeBoardId,
+              title: taskTitle,
+              description: taskDesc,
+              assignedUserId: userId,
+              priority: taskPriority,
+              status: taskStatus,
+              dueDate: currentDueDate,
+              recurrence: taskRepeat,
+              recurrenceParentId: parentId,
+            });
+            
+            currentDueDate = getNextDueDate(currentDueDate, taskRepeat);
+            count++;
+            
+            if (!currentDueDate || currentDueDate === occurrences[occurrences.length - 1].dueDate) {
+              break;
+            }
           }
-          
-          occurrences.push({
-            boardId: activeBoardId,
-            title: taskTitle,
-            description: taskDesc,
-            assignedUserId: taskAssignee,
-            priority: taskPriority,
-            status: taskStatus,
-            dueDate: currentDueDate,
-            recurrence: taskRepeat,
-            recurrenceParentId: parentId,
-          });
-          
-          currentDueDate = getNextDueDate(currentDueDate, taskRepeat);
-          count++;
-          
-          if (!currentDueDate || currentDueDate === occurrences[occurrences.length - 1].dueDate) {
-            break;
-          }
-        }
+        });
 
         if (occurrences.length > 0) {
           addTasks(occurrences);
-          toast.success(`Created ${occurrences.length} recurring tasks successfully.`);
+          toast.success(`Created repeating tasks for ${taskAssignees.length} members.`);
         } else {
           toast.error("Failed to create repeating tasks. Check options.");
         }
@@ -390,21 +669,21 @@ export default function TasksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Task Management</h1>
           <p className="text-muted-foreground mt-1">Manage project boards, tasks, and staff assignments.</p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-2 md:gap-3">
+        <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 lg:gap-3 flex-shrink-0">
           {canManageBoards && (
             <Dialog open={isBoardOpen} onOpenChange={setIsBoardOpen}>
-              <DialogTrigger>
+              <DialogTrigger render={
                 <Button variant="outline" className="gap-2 rounded-full flex-shrink-0">
                   <Plus className="h-4 w-4" />
                   New Board
                 </Button>
-              </DialogTrigger>
+              } />
               <DialogContent className="sm:max-w-[425px]">
                 <form onSubmit={handleCreateBoard}>
                   <DialogHeader>
@@ -469,70 +748,98 @@ export default function TasksPage() {
 
           {canManageBoards && activeBoard && (
             <Dialog open={isEditBoardOpen} onOpenChange={setIsEditBoardOpen}>
-              <DialogTrigger>
+              <DialogTrigger render={
                 <Button variant="outline" className="gap-2 rounded-full flex-shrink-0" onClick={handleOpenEditBoard}>
                   <Edit className="h-4 w-4 text-purple-500" />
                   Edit Board
                 </Button>
-              </DialogTrigger>
+              } />
               <DialogContent className="sm:max-w-[425px]">
-                <form onSubmit={handleSaveBoard}>
-                  <DialogHeader>
-                    <DialogTitle>Edit Task Board</DialogTitle>
-                    <DialogDescription>
-                      Update board name and control access permissions.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-name">Board Name</Label>
-                      <Input 
-                        id="edit-name" 
-                        value={editBoardName} 
-                        onChange={(e) => setEditBoardName(e.target.value)} 
-                        placeholder="e.g. Operations Security" 
-                        required
-                      />
+                {showDeleteConfirm ? (
+                  <div className="space-y-4 py-6 text-center animate-in fade-in zoom-in-95 duration-200">
+                    <div className="h-12 w-12 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-2">
+                      <AlertCircle className="h-6 w-6" />
                     </div>
-                    <div className="space-y-2">
-                      <Label>Access Permissions (Roles)</Label>
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        {(["Boss", "Bagman", "Consigliere", "Associate", "Custodian"] as Role[]).map((role) => (
-                          <div key={`edit-${role}`} className="flex items-center space-x-2">
-                            <Checkbox 
-                              id={`edit-role-${role}`} 
-                              checked={editBoardRoles.includes(role)}
-                              onCheckedChange={() => toggleEditBoardRoleSelection(role)}
-                            />
-                            <Label htmlFor={`edit-role-${role}`} className="text-sm font-normal cursor-pointer">
-                              {role}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="space-y-2 border-t border-border/40 pt-3">
-                      <Label>Access Permissions (Individual Users)</Label>
-                      <div className="grid grid-cols-2 gap-2 pt-1 max-h-[150px] overflow-y-auto">
-                        {users.map((u) => (
-                          <div key={`edit-user-${u.id}`} className="flex items-center space-x-2">
-                            <Checkbox 
-                              id={`edit-user-${u.id}`} 
-                              checked={editBoardUsers.includes(u.id)}
-                              onCheckedChange={() => toggleEditBoardUserSelection(u.id)}
-                            />
-                            <Label htmlFor={`edit-user-${u.id}`} className="text-sm font-normal cursor-pointer truncate">
-                              @{u.username}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
+                    <h3 className="text-lg font-bold text-foreground">Delete Board: "{activeBoard.name}"?</h3>
+                    <p className="text-xs text-muted-foreground max-w-[320px] mx-auto leading-relaxed">
+                      Warning: This will permanently delete this task board and all of its tasks. This action is irreversible.
+                    </p>
+                    <div className="flex justify-center gap-3 pt-4">
+                      <Button type="button" variant="outline" className="rounded-lg text-xs" onClick={() => setShowDeleteConfirm(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="button" variant="destructive" className="rounded-lg text-xs cursor-pointer" onClick={handleDeleteActiveBoard}>
+                        Yes, Delete Board
+                      </Button>
                     </div>
                   </div>
-                  <DialogFooter>
-                    <Button type="submit">Save Changes</Button>
-                  </DialogFooter>
-                </form>
+                ) : (
+                  <form onSubmit={handleSaveBoard}>
+                    <DialogHeader>
+                      <DialogTitle>Edit Task Board</DialogTitle>
+                      <DialogDescription>
+                        Update board name and control access permissions.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-name">Board Name</Label>
+                        <Input 
+                          id="edit-name" 
+                          value={editBoardName} 
+                          onChange={(e) => setEditBoardName(e.target.value)} 
+                          placeholder="e.g. Operations Security" 
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Access Permissions (Roles)</Label>
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          {(["Boss", "Bagman", "Consigliere", "Associate", "Custodian"] as Role[]).map((role) => (
+                            <div key={`edit-${role}`} className="flex items-center space-x-2">
+                              <Checkbox 
+                                id={`edit-role-${role}`} 
+                                checked={editBoardRoles.includes(role)}
+                                onCheckedChange={() => toggleEditBoardRoleSelection(role)}
+                              />
+                              <Label htmlFor={`edit-role-${role}`} className="text-sm font-normal cursor-pointer">
+                                {role}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-2 border-t border-border/40 pt-3">
+                        <Label>Access Permissions (Individual Users)</Label>
+                        <div className="grid grid-cols-2 gap-2 pt-1 max-h-[150px] overflow-y-auto">
+                          {users.map((u) => (
+                            <div key={`edit-user-${u.id}`} className="flex items-center space-x-2">
+                              <Checkbox 
+                                id={`edit-user-${u.id}`} 
+                                checked={editBoardUsers.includes(u.id)}
+                                onCheckedChange={() => toggleEditBoardUserSelection(u.id)}
+                              />
+                              <Label htmlFor={`edit-user-${u.id}`} className="text-sm font-normal cursor-pointer truncate">
+                                @{u.username}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter className="flex justify-between items-center gap-2">
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive mr-auto cursor-pointer rounded-lg text-xs"
+                        onClick={() => setShowDeleteConfirm(true)}
+                      >
+                        Delete Board
+                      </Button>
+                      <Button type="submit" className="rounded-lg text-xs">Save Changes</Button>
+                    </DialogFooter>
+                  </form>
+                )}
               </DialogContent>
             </Dialog>
           )}
@@ -557,86 +864,176 @@ export default function TasksPage() {
         </Card>
       ) : (
         <div className="space-y-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-4 gap-4 w-full overflow-hidden">
-            <div className="flex flex-nowrap gap-2 overflow-x-auto pb-2 w-full md:w-auto md:flex-wrap md:overflow-visible md:pb-0 scrollbar-none">
-              {accessibleBoards.map((b) => (
-                <Button 
-                  key={b.id}
-                  variant={activeBoardId === b.id ? "default" : "ghost"}
-                  onClick={() => setActiveBoardId(b.id)}
-                  className="rounded-full flex-shrink-0"
-                >
-                  {b.name}
-                </Button>
-              ))}
+          <div className="border-b pb-4 space-y-4">
+            {/* Board Selector Row */}
+            <div className="relative w-full group">
+              {/* Left arrow - only on large screens */}
+              <button 
+                onClick={() => {
+                  if (scrollRef.current) {
+                    scrollRef.current.scrollBy({ left: -200, behavior: 'smooth' });
+                  }
+                }}
+                className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 hidden lg:flex items-center justify-center h-8 w-8 rounded-full bg-background/80 border border-border/60 shadow-xs hover:bg-muted hover:text-foreground text-muted-foreground cursor-pointer transition-all opacity-0 group-hover:opacity-100"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              <div 
+                ref={scrollRef}
+                style={getMaskStyle()}
+                className="flex flex-nowrap gap-2 overflow-x-auto pb-1.5 pt-1 w-full scrollbar-none transition-all duration-300"
+              >
+                <div className="flex bg-muted/30 p-1 rounded-full border border-border/40 gap-1.5 flex-nowrap flex-shrink-0">
+                  {accessibleBoards.map((b) => {
+                    const isActive = activeBoardId === b.id;
+                    return (
+                      <button 
+                        key={b.id}
+                        onClick={() => setActiveBoardId(b.id)}
+                        className={cn(
+                          "px-4 py-1.5 text-xs font-semibold rounded-full transition-all duration-200 flex-shrink-0 cursor-pointer select-none border border-transparent",
+                          isActive 
+                            ? "bg-background text-foreground shadow-xs border-border/60 scale-102 font-bold"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                        )}
+                      >
+                        {b.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Right arrow - only on large screens */}
+              <button 
+                onClick={() => {
+                  if (scrollRef.current) {
+                    scrollRef.current.scrollBy({ left: 200, behavior: 'smooth' });
+                  }
+                }}
+                className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 hidden lg:flex items-center justify-center h-8 w-8 rounded-full bg-background/80 border border-border/60 shadow-xs hover:bg-muted hover:text-foreground text-muted-foreground cursor-pointer transition-all opacity-0 group-hover:opacity-100"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
 
-            <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto w-full md:w-auto justify-start md:justify-end pb-2 md:pb-0 scrollbar-none">
-              {view === "broader" && (
-                <div className="flex items-center gap-2 mr-2">
-                  <span className="text-xs text-muted-foreground font-medium">Range:</span>
-                  <Select value={String(broaderRange)} onValueChange={(val) => val && setBroaderRange(Number(val) as 3 | 6 | 12)}>
-                    <SelectTrigger className="w-[120px] h-8 rounded-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="3">3 Months</SelectItem>
-                      <SelectItem value="6">6 Months</SelectItem>
-                      <SelectItem value="12">1 Year</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              
-              <Button 
-                variant={view === "kanban" ? "secondary" : "ghost"} 
-                size="sm" 
-                onClick={() => setView("kanban")}
-                className="gap-1.5 rounded-full flex-shrink-0"
-              >
-                <LayoutGrid className="h-4 w-4" />
-                Kanban
-              </Button>
-              
-              <Button 
-                variant={view === "broader" ? "secondary" : "ghost"} 
-                size="sm" 
-                onClick={() => setView("broader")}
-                className="gap-1.5 rounded-full flex-shrink-0"
-              >
-                <LayoutGrid className="h-4 w-4 text-purple-500" />
-                View Broader
-              </Button>
+            {/* Views and Active Board Metadata Row */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 w-full">
+              <div className="flex md:hidden lg:flex items-center gap-2 flex-shrink-0">
+                <span className="text-sm font-medium text-muted-foreground">Active Board:</span>
+                <span className="text-sm font-semibold bg-accent/20 text-accent-foreground px-3 py-1 rounded-full border border-accent/30 shadow-xs">
+                  {activeBoard?.name || "None Selected"}
+                </span>
+              </div>
 
-              <Button 
-                variant={view === "calendar" ? "secondary" : "ghost"} 
-                size="sm" 
-                onClick={() => setView("calendar")}
-                className="gap-1.5 rounded-full flex-shrink-0"
-              >
-                <Calendar className="h-4 w-4 text-emerald-500" />
-                Calendar
-              </Button>
+              <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto w-full lg:w-auto justify-start lg:justify-end pb-2 lg:pb-0 scrollbar-none">
+                {view === "table" && (
+                  <div className="flex items-center gap-2 mr-2 flex-shrink-0">
+                    <span className="text-xs text-muted-foreground font-medium flex-shrink-0">Range:</span>
+                    <div className="w-[130px] flex-shrink-0">
+                      <Select value={tableRange} onValueChange={(val) => val && setTableRange(val as any)}>
+                        <SelectTrigger className="w-full h-8 rounded-full">
+                          <SelectValue>
+                            {(value) => {
+                              const labels: Record<string, string> = {
+                                "1": "1 Month",
+                                "3": "3 Months",
+                                "6": "6 Months",
+                                "12": "1 Year",
+                              };
+                              return labels[value as string] || value;
+                            }}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 Month</SelectItem>
+                          <SelectItem value="3">3 Months</SelectItem>
+                          <SelectItem value="6">6 Months</SelectItem>
+                          <SelectItem value="12">1 Year</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
 
-              <Button 
-                variant={view === "table" ? "secondary" : "ghost"} 
-                size="sm" 
-                onClick={() => setView("table")}
-                className="gap-1.5 rounded-full flex-shrink-0"
-              >
-                <List className="h-4 w-4" />
-                Table
-              </Button>
+                {view === "broader" && (
+                  <div className="flex items-center gap-2 mr-2 flex-shrink-0">
+                    <span className="text-xs text-muted-foreground font-medium flex-shrink-0">Range:</span>
+                    <div className="w-[110px] flex-shrink-0">
+                      <Select value={String(broaderRange)} onValueChange={(val) => val && setBroaderRange(Number(val) as 3 | 6 | 12)}>
+                        <SelectTrigger className="w-full h-8 rounded-full">
+                          <SelectValue>
+                            {(value) => {
+                              const labels: Record<string, string> = {
+                                "3": "3 Months",
+                                "6": "6 Months",
+                                "12": "1 Year",
+                              };
+                              return labels[value as string] || value;
+                            }}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="3">3 Months</SelectItem>
+                          <SelectItem value="6">6 Months</SelectItem>
+                          <SelectItem value="12">1 Year</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+                
+                <Button 
+                  variant={view === "kanban" ? "secondary" : "ghost"} 
+                  size="sm" 
+                  onClick={() => setView("kanban")}
+                  className="gap-1.5 rounded-full flex-shrink-0"
+                >
+                  <LayoutGrid className="h-4 w-4 text-primary" />
+                  Kanban
+                </Button>
+                
+                <Button 
+                  variant={view === "broader" ? "secondary" : "ghost"} 
+                  size="sm" 
+                  onClick={() => setView("broader")}
+                  className="gap-1.5 rounded-full flex-shrink-0"
+                >
+                  <LayoutGrid className="h-4 w-4 text-purple-500" />
+                  View Broader
+                </Button>
+
+                <Button 
+                  variant={view === "calendar" ? "secondary" : "ghost"} 
+                  size="sm" 
+                  onClick={() => setView("calendar")}
+                  className="gap-1.5 rounded-full flex-shrink-0"
+                >
+                  <Calendar className="h-4 w-4 text-emerald-500" />
+                  Calendar
+                </Button>
+
+                <Button 
+                  variant={view === "table" ? "secondary" : "ghost"} 
+                  size="sm" 
+                  onClick={() => setView("table")}
+                  className="gap-1.5 rounded-full flex-shrink-0"
+                >
+                  <List className="h-4 w-4 text-blue-500" />
+                  Table
+                </Button>
+              </div>
             </div>
           </div>
 
           {/* Kanban / Broader View */}
           {(view === "kanban" || view === "broader") && (
-            <div className="flex overflow-x-auto gap-4 pb-4 md:grid md:grid-cols-3 lg:grid-cols-5 md:overflow-x-visible md:pb-0">
+            <div ref={kanbanContainerRef} className="flex overflow-x-auto gap-4 pb-4 w-full select-none">
               {(["Not Started", "In Progress", "Waiting", "Completed", "Cancelled"] as Task["status"][]).map((status) => {
-                const statusTasks = activeTasks.filter((t) => t.status === status);
+                const statusTasks = sortedTasks.filter((t) => t.status === status);
                 return (
-                  <div key={status} className="bg-muted/30 rounded-xl p-4 flex flex-col min-h-[500px] w-[280px] sm:w-[320px] md:w-auto flex-shrink-0 md:flex-shrink">
+                  <div key={status} className="bg-muted/30 rounded-xl p-4 flex flex-col min-h-[500px] w-[280px] sm:w-[300px] flex-shrink-0">
                     <div className="flex items-center justify-between mb-4">
                       <span className="font-semibold text-sm">{status}</span>
                       <Badge variant="outline" className="rounded-full font-normal">
@@ -723,13 +1120,14 @@ export default function TasksPage() {
 
           {/* Table View */}
           {view === "table" && (
-            <Card>
+            <Card className="overflow-hidden border border-border/40 bg-card/60 backdrop-blur-md shadow-lg">
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
+                {/* Desktop/Tablet Table View */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-muted/50 border-b text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                    <thead className="bg-muted/50 border-b border-border/40 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
                       <tr>
-                        <th className="px-6 py-4">Task</th>
+                        <th className="px-6 py-4 w-full">Task</th>
                         <th className="px-6 py-4">Priority</th>
                         <th className="px-6 py-4">Status</th>
                         <th className="px-6 py-4">Due Date</th>
@@ -737,11 +1135,11 @@ export default function TasksPage() {
                         <th className="px-6 py-4 text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y">
+                    <tbody className="divide-y divide-border/40">
                       {activeTasks.map((task) => {
                         const assignee = users.find((u) => u.id === task.assignedUserId);
                         return (
-                          <tr key={task.id} className="hover:bg-muted/20 cursor-pointer" onClick={() => handleOpenEditTask(task)}>
+                          <tr key={task.id} className="hover:bg-muted/20 cursor-pointer transition-colors" onClick={() => handleOpenEditTask(task)}>
                             <td className="px-6 py-4">
                               <div className="font-semibold text-foreground flex items-center gap-1.5">
                                 {task.recurrence && task.recurrence !== "none" && (
@@ -749,33 +1147,33 @@ export default function TasksPage() {
                                 )}
                                 <span>{task.title}</span>
                               </div>
-                              <div className="text-xs text-muted-foreground line-clamp-1">{task.description}</div>
+                              <div className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{task.description}</div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-4 whitespace-nowrap">
                               <Badge className={getPriorityColor(task.priority)}>
                                 {task.priority}
                               </Badge>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
                                 {task.status}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-muted-foreground">
+                            <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">
                               {task.dueDate || "No due date"}
                             </td>
-                            <td className="px-6 py-4 font-medium text-foreground">
+                            <td className="px-6 py-4 font-medium text-foreground whitespace-nowrap">
                               @{assignee?.username || "unassigned"}
                             </td>
-                            <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                            <td className="px-6 py-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                               <div className="flex justify-end gap-2">
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => handleCopyTask(task)}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-full" onClick={() => handleCopyTask(task)}>
                                   <Copy className="h-4 w-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEditTask(task)}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => handleOpenEditTask(task)}>
                                   <Edit className="h-4 w-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteTask(task.id)}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive rounded-full" onClick={() => handleDeleteTask(task.id)}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
@@ -792,6 +1190,74 @@ export default function TasksPage() {
                       )}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile Task List View */}
+                <div className="block md:hidden divide-y divide-border/40">
+                  {activeTasks.map((task) => {
+                    const assignee = users.find((u) => u.id === task.assignedUserId);
+                    return (
+                      <div 
+                        key={task.id} 
+                        className="p-4 hover:bg-muted/10 active:bg-muted/20 cursor-pointer space-y-3 transition-colors"
+                        onClick={() => handleOpenEditTask(task)}
+                      >
+                        {/* Title & Description & Actions */}
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="space-y-1 flex-1 min-w-0">
+                            <div className="font-semibold text-foreground text-sm flex items-center gap-1.5">
+                              {task.recurrence && task.recurrence !== "none" && (
+                                <Repeat className="h-3.5 w-3.5 text-violet-500 flex-shrink-0" />
+                              )}
+                              <span className="break-words">{task.title}</span>
+                            </div>
+                            {task.description && (
+                              <p className="text-xs text-muted-foreground line-clamp-2 pr-2">
+                                {task.description}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-full" onClick={() => handleCopyTask(task)}>
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive rounded-full" onClick={() => handleDeleteTask(task.id)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Status Badges & Meta info */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/10">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge className={`text-[10px] px-2 py-0.5 rounded-full ${getPriorityColor(task.priority)}`}>
+                              {task.priority}
+                            </Badge>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${getStatusColor(task.status)}`}>
+                              {task.status}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3.5 w-3.5" />
+                              <span>{task.dueDate || "No date"}</span>
+                            </div>
+                            <span className="font-medium text-foreground bg-muted/50 px-2 py-0.5 rounded-full">
+                              @{assignee?.username || "unassigned"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {activeTasks.length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground text-sm">
+                      No tasks found on this board.
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -887,10 +1353,12 @@ export default function TasksPage() {
                                   setEditingTask(null);
                                   setTaskTitle("");
                                   setTaskDesc("");
-                                  setTaskAssignee(users[0]?.id || "");
+                                  setTaskAssignees(users[0]?.id ? [users[0].id] : []);
+                                  setSelectedAssigneeRoles([]);
                                   setTaskPriority("Medium");
                                   setTaskStatus("Not Started");
                                   setTaskDueDate(dateStr);
+                                  setNoDeadline(false);
                                   setTaskRepeat("none");
                                   setRepeatEndType("count");
                                   setRepeatCount(10);
@@ -967,18 +1435,46 @@ export default function TasksPage() {
                   placeholder="Brief description of requirements" 
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="task-assignee">Assignee</Label>
-                  <UserDropdown value={taskAssignee} onValueChange={setTaskAssignee} />
+              <div className="space-y-2">
+                <Label htmlFor="task-assignees" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assign To</Label>
+                <MultiUserDropdown 
+                  value={taskAssignees} 
+                  onValueChange={setTaskAssignees} 
+                  placeholder="Select assignees"
+                />
+              </div>
+
+              {/* Due Date & Calendar Picker */}
+              <div className="space-y-2 border-t border-border/40 pt-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="task-dueDate" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Due Date</Label>
+                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                    <Checkbox 
+                      id="task-no-deadline"
+                      checked={noDeadline} 
+                      onCheckedChange={(checked) => {
+                        setNoDeadline(!!checked);
+                        if (checked) setTaskDueDate("");
+                      }}
+                    />
+                    <span>No deadline</span>
+                  </label>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="task-dueDate">Due Date</Label>
+                
+                <div className="flex gap-2">
                   <Input 
                     id="task-dueDate" 
                     type="date" 
-                    value={taskDueDate} 
+                    value={noDeadline ? "" : taskDueDate} 
+                    disabled={noDeadline}
                     onChange={(e) => setTaskDueDate(e.target.value)} 
+                    placeholder="YYYY-MM-DD"
+                    className="flex-1 bg-background/50 border-border/40"
+                  />
+                  <CalendarPicker 
+                    value={taskDueDate} 
+                    onChange={setTaskDueDate} 
+                    disabled={noDeadline}
                   />
                 </div>
               </div>

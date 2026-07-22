@@ -16,6 +16,8 @@ import {
   dbDeleteTask,
   dbAddSubmission,
   dbAddLog,
+  dbAddShortcut,
+  dbDeleteShortcut,
 } from "./actions";
 
 export type Role = "Boss" | "Underboss" | "Bagman" | "Consigliere" | "Associate" | "Custodian";
@@ -63,6 +65,13 @@ export interface LogEntry {
   username: string;
 }
 
+export interface Shortcut {
+  id: string;
+  userId: string;
+  title: string;
+  url: string;
+}
+
 interface AppContextType {
   currentUser: User;
   realUser: User | null;
@@ -71,6 +80,7 @@ interface AppContextType {
   tasks: Task[];
   submissions: BlackChipSubmission[];
   logs: LogEntry[];
+  shortcuts: Shortcut[];
   setCurrentUser: (user: User) => void;
   addUser: (username: string, role: Role, password?: string) => void;
   deleteUser: (id: string) => void;
@@ -86,6 +96,8 @@ interface AppContextType {
   addLog: (action: string) => void;
   loginUser: (username: string, passwordInput: string) => boolean;
   logoutUser: () => void;
+  addShortcut: (title: string, url: string) => void;
+  deleteShortcut: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -102,6 +114,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [submissions, setSubmissions] = useState<BlackChipSubmission[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [shortcuts, setShortcuts] = useState<Shortcut[]>([]);
   const [loading, setLoading] = useState(true);
 
   const handleSetRealUser = (user: User) => {
@@ -119,6 +132,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setTasks(data.tasks as Task[]);
         setSubmissions(data.submissions as BlackChipSubmission[]);
         setLogs(data.logs as LogEntry[]);
+        setShortcuts((data.shortcuts || []) as Shortcut[]);
 
         // Determine the real user
         let initialRealUser: User | null = null;
@@ -345,6 +359,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const addShortcut = async (title: string, url: string) => {
+    try {
+      const newId = await dbAddShortcut(currentUser.id, title, url);
+      const newShortcut: Shortcut = {
+        id: newId,
+        userId: currentUser.id,
+        title,
+        url,
+      };
+      setShortcuts((prev) => [...prev, newShortcut]);
+      await addLog(`Added shortcut: "${title}" (${url})`);
+    } catch (err) {
+      console.error("Failed to add shortcut:", err);
+    }
+  };
+
+  const deleteShortcut = async (id: string) => {
+    const target = shortcuts.find((s) => s.id === id);
+    if (!target) return;
+    try {
+      await dbDeleteShortcut(id);
+      setShortcuts((prev) => prev.filter((s) => s.id !== id));
+      await addLog(`Deleted shortcut: "${target.title}"`);
+    } catch (err) {
+      console.error("Failed to delete shortcut:", err);
+    }
+  };
+
   const loginUser = (username: string, passwordInput: string): boolean => {
     const match = users.find(
       (u) =>
@@ -380,6 +422,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         tasks,
         submissions,
         logs,
+        shortcuts,
         setCurrentUser: handleSetCurrentUser,
         addUser,
         deleteUser,
@@ -395,6 +438,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addLog,
         loginUser,
         logoutUser,
+        addShortcut,
+        deleteShortcut,
       }}
     >
       {children}

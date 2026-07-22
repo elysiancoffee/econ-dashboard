@@ -113,3 +113,44 @@
     @apply font-sans;
   }
 }
+
+/* Custom utility to hide scrollbars */
+.scrollbar-none {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+/* Global premium sleek scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.1);
+  border-radius: 9999px;
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+  transition: background 0.25s ease-in-out;
+}
+
+/* Fade in the thumb when the scrollable container is hovered */
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Emphasize the scrollbar thumb when hovered directly */
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.7) !important;
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { useApp, Role, User } from "@/lib/store";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,27 @@ import { toast } from "sonner";
 export default function SettingsPage() {
   const { currentUser, users, addUser, deleteUser, updateUserRole } = useApp();
   const { theme, setTheme } = useTheme();
+  
+  // Default Tasks View setting
+  const [defaultView, setDefaultView] = useState<string>("Kanban");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && currentUser?.id) {
+      const saved = localStorage.getItem(`default_task_view_${currentUser.id}`);
+      if (saved) {
+        setDefaultView(saved);
+      }
+    }
+  }, [currentUser]);
+
+  const handleDefaultViewChange = (val: string | null) => {
+    if (!val) return;
+    setDefaultView(val);
+    if (currentUser?.id) {
+      localStorage.setItem(`default_task_view_${currentUser.id}`, val);
+      toast.success(`Default task view updated to: ${val}`);
+    }
+  };
   
   // Permission Gate: Boss and Consigliere are administrators
   const isAdmin = currentUser.role === "Boss";
@@ -83,8 +104,8 @@ export default function SettingsPage() {
       <Tabs defaultValue="profile" className="space-y-4">
         <TabsList className="bg-muted/40 p-1 rounded-lg">
           <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="permissions">User Permissions</TabsTrigger>
-          <TabsTrigger value="appearance">Appearance</TabsTrigger>
+          <TabsTrigger value="staff">Staff Management</TabsTrigger>
+          <TabsTrigger value="preferences">Preferences</TabsTrigger>
         </TabsList>
 
         {/* Profile Settings */}
@@ -113,7 +134,7 @@ export default function SettingsPage() {
         </TabsContent>
 
         {/* User Permissions Management (Admin only) */}
-          <TabsContent value="permissions">
+          <TabsContent value="staff">
             <Card>
               <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -262,7 +283,7 @@ export default function SettingsPage() {
           </TabsContent>
 
         {/* Appearance Settings */}
-        <TabsContent value="appearance">
+        <TabsContent value="preferences">
           <Card>
             <CardHeader>
               <CardTitle>Theme Customization</CardTitle>
@@ -307,6 +328,33 @@ export default function SettingsPage() {
                   <span className="font-semibold text-sm">System Theme</span>
                   <span className="text-xs text-muted-foreground mt-1">Syncs with your device settings.</span>
                 </button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Task Board Preferences</CardTitle>
+              <CardDescription>
+                Customize your default layout settings for the Task Management section.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2 max-w-sm">
+                <Label htmlFor="default-view">Default Board View</Label>
+                <Select 
+                  value={defaultView} 
+                  onValueChange={handleDefaultViewChange}
+                >
+                  <SelectTrigger id="default-view" className="rounded-full">
+                    <SelectValue placeholder="Select default view" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Kanban">Kanban (Columns)</SelectItem>
+                    <SelectItem value="Calendar">Calendar (Grid)</SelectItem>
+                    <SelectItem value="Table">Table (List)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>
