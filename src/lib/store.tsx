@@ -161,6 +161,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
           setCurrentUser(initialCurrentUser);
           localStorage.setItem("admin_current_user", JSON.stringify(initialCurrentUser));
+
+          // Log that the session became active
+          addLog(
+            `Session became active for user ${initialCurrentUser.username}`,
+            initialCurrentUser.id,
+            initialCurrentUser.username
+          );
         } else {
           setRealUserState(null);
           setCurrentUser({
@@ -178,13 +185,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadData();
   }, []);
 
-  const addLog = async (action: string) => {
+  const addLog = async (action: string, overrideUserId?: string, overrideUsername?: string) => {
     try {
-      const newLogId = await dbAddLog(action, currentUser.id, currentUser.username);
+      const uid = overrideUserId || currentUser.id;
+      const username = overrideUsername || currentUser.username;
+      const newLogId = await dbAddLog(action, uid, username);
       const newLog: LogEntry = {
         id: newLogId,
         action,
-        username: currentUser.username,
+        username,
         timestamp: new Date().toISOString(),
       };
       setLogs((prev) => [newLog, ...prev]);
@@ -196,12 +205,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleSetCurrentUser = (user: User) => {
     setCurrentUser(user);
     localStorage.setItem("admin_current_user", JSON.stringify(user));
-    // Explicit log
-    addLog(`Switched active profile to ${user.username} (${user.role})`);
+    // Explicit log with correct user overrides
+    addLog(`Switched active profile to ${user.username} (${user.role})`, user.id, user.username);
   };
 
   const logoutUser = () => {
-    addLog(`Logged out active profile: ${currentUser.username}`);
+    addLog(`Logged out active profile: ${currentUser.username}`, currentUser.id, currentUser.username);
     setRealUserState(null);
     setCurrentUser({
       id: "guest",
