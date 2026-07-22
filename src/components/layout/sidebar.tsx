@@ -28,8 +28,8 @@ const navItems = [
   { name: "Image Host", href: "/img-host", icon: ImageUp },
   { name: "Gallery", href: "/gallery", icon: ImageIcon },
   { name: "Templates", href: "/templates", icon: LayoutTemplate },
-  { name: "PSD Editor", href: "/psd-editor", icon: Wand2 },
-  { name: "Logs", href: "/logs", icon: ScrollText },
+  // { name: "PSD Editor", href: "/psd-editor", icon: Wand2 },
+  // { name: "Logs", href: "/logs", icon: ScrollText },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -92,6 +92,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           );
         })}
         {currentUser.role === "Boss" && (
+          <>
           <Link
             href="/salary"
             className={cn(
@@ -104,6 +105,20 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <CreditCard className="h-4 w-4 text-muted-foreground" />
             <span>Salary</span>
           </Link>
+          <Link
+            href="/logs"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+              pathname === "/logs"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <ScrollText className="h-4 w-4 text-muted-foreground" />
+            <span>Logs</span>
+          </Link>
+          
+          </>
         )}
       </nav>
       

@@ -265,7 +265,11 @@ export default function Dashboard() {
     
     // Add protocol if missing
     let formattedUrl = newShortcutUrl.trim();
-    if (!/^https?:\/\//i.test(formattedUrl)) {
+    if (formattedUrl.startsWith('/')) {
+      // Keep it as a relative internal route
+      formattedUrl = formattedUrl;
+    } else if (!/^https?:\/\//i.test(formattedUrl)) {
+      // Prepend https:// only if it's an external domain/URL
       formattedUrl = `https://${formattedUrl}`;
     }
 
@@ -354,11 +358,11 @@ export default function Dashboard() {
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-card/40 border border-border/40 p-6 rounded-2xl backdrop-blur-md">
         <div>
           <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-            My Workspace
+            Dashboard
           </h1>
           <p className="text-muted-foreground mt-1 flex items-center gap-1.5 text-sm">
             <Sparkles className="h-4 w-4 text-purple-500" />
-            Welcome back, <strong className="text-foreground">@{currentUser.username}</strong>. Review your agenda and stats.
+            Welcome back, {currentUser.username}. It's time to do some shady business.
           </p>
         </div>
 
@@ -371,7 +375,7 @@ export default function Dashboard() {
               value={selectedViewingUserName} 
               onValueChange={(val) => val && setSelectedViewingUserName(val)}
             >
-              <SelectTrigger className="w-[180px] h-7 border-none bg-transparent shadow-none focus:ring-0 p-0 text-xs font-bold text-primary">
+              <SelectTrigger className="w-[180px] h-7 border-none bg-transparent shadow-none focus:ring-0 p-0 text-xs font-bold text-primary ps-3">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -406,7 +410,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-extrabold text-emerald-500">{completedTasksCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">Successfully resolved</p>
+            <p className="text-xs text-muted-foreground mt-1">Successfully completed</p>
           </CardContent>
         </Card>
 
@@ -417,13 +421,13 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-extrabold text-amber-500">{pendingTasksCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">Require action</p>
+            <p className="text-xs text-muted-foreground mt-1">Needs to be done</p>
           </CardContent>
         </Card>
 
         <Card className="border-border/30 bg-card/30 backdrop-blur-xs">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Completion Rate</CardTitle>
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tasks Progress</CardTitle>
             <Sparkles className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent className="space-y-3">
@@ -558,7 +562,7 @@ export default function Dashboard() {
             <CardHeader className="pb-3 flex flex-row items-center justify-between border-b border-border/40">
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-purple-500" />
-                <CardTitle className="text-sm">Personal Scratchpad</CardTitle>
+                <CardTitle className="text-sm">Personal Notes</CardTitle>
               </div>
               {isBoss && viewedUser.id !== currentUser.id && (
                 <Badge variant="destructive" className="text-[9px] scale-90 rounded-full">
@@ -570,7 +574,7 @@ export default function Dashboard() {
               <Textarea 
                 value={notepadText}
                 onChange={(e) => handleSaveNotepad(e.target.value)}
-                placeholder="Write notes, clipboard content, or scratch items here... (Saves automatically)"
+                placeholder="Write notes that are only visible to you... (Saves automatically)"
                 className="min-h-[120px] bg-background/30 border-border/40 text-xs font-mono resize-none focus-visible:ring-1"
               />
             </CardContent>
@@ -589,7 +593,7 @@ export default function Dashboard() {
                     onClick={() => setTimerMode("work")}
                     className={cn("px-2 py-0.5 rounded-full transition-all", timerMode === "work" ? "bg-background shadow-xs text-foreground" : "text-muted-foreground")}
                   >
-                    Focus
+                    Work
                   </button>
                   <button 
                     onClick={() => setTimerMode("short")}
@@ -601,7 +605,7 @@ export default function Dashboard() {
                     onClick={() => setTimerMode("long")}
                     className={cn("px-2 py-0.5 rounded-full transition-all", timerMode === "long" ? "bg-background shadow-xs text-foreground" : "text-muted-foreground")}
                   >
-                    Long
+                    Focus
                   </button>
                 </div>
               </div>
@@ -666,7 +670,7 @@ export default function Dashboard() {
             <CardHeader className="pb-3 border-b border-border/40">
               <div className="flex items-center gap-2">
                 <Bookmark className="h-4 w-4 text-emerald-500" />
-                <CardTitle className="text-sm">Team Shortcuts & Links</CardTitle>
+                <CardTitle className="text-sm">Apparition Links</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
@@ -674,14 +678,14 @@ export default function Dashboard() {
               <form onSubmit={handleAddShortcut} className="flex gap-1.5">
                 <div className="grid grid-cols-2 gap-1 flex-1">
                   <Input 
-                    placeholder="Figma Specs" 
+                    placeholder="Title" 
                     value={newShortcutTitle}
                     onChange={(e) => setNewShortcutTitle(e.target.value)}
                     className="h-7 text-xs bg-background/50"
                     required
                   />
                   <Input 
-                    placeholder="figma.com/file/..." 
+                    placeholder="/url" 
                     value={newShortcutUrl}
                     onChange={(e) => setNewShortcutUrl(e.target.value)}
                     className="h-7 text-xs bg-background/50"
@@ -735,98 +739,6 @@ export default function Dashboard() {
                   </p>
                 )}
               </div>
-            </CardContent>
-          </Card>
-
-          {/* TOOL 4: PRESENCE GRID */}
-          <Card className="border-border/40 bg-card/60 backdrop-blur-md shadow-xs">
-            <CardHeader className="pb-3 border-b border-border/40">
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-blue-500" />
-                <CardTitle className="text-sm">Team Presence & Timezones</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <div className="space-y-3 max-h-[200px] overflow-y-auto pr-1">
-                {users.map((u) => {
-                  const state = staffSimStates[u.username] || { status: "Offline", activity: "Offline", tz: "GMT" };
-                  const localTime = state.status !== "Offline" ? getSimulatedLocalTime(state.tz) : "";
-                  return (
-                    <div key={u.id} className="flex items-start justify-between text-xs border-b border-border/10 pb-2 last:border-0 last:pb-0">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className={cn(
-                            "h-2 w-2 rounded-full flex-shrink-0",
-                            state.status === "Active" ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" :
-                            state.status === "Idle" ? "bg-amber-500" : "bg-zinc-600"
-                          )} />
-                          <span className="font-semibold text-foreground">@{u.username}</span>
-                          <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.2 rounded font-mono">
-                            {u.role}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground truncate max-w-[180px]">
-                          {state.activity}
-                        </p>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <span className="font-mono text-[10px] font-bold text-foreground">
-                          {localTime || "--:--"}
-                        </span>
-                        <p className="text-[9px] text-muted-foreground font-mono leading-none">
-                          {state.tz}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* TOOL 5: QUICK TASK DRAFT CREATOR */}
-          <Card className="border-border/40 bg-card/60 backdrop-blur-md shadow-xs">
-            <CardHeader className="pb-3 border-b border-border/40">
-              <div className="flex items-center gap-2">
-                <Plus className="h-4 w-4 text-purple-500" />
-                <CardTitle className="text-sm">Quick Task Draft</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <form onSubmit={handleCreateDraft} className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="draft-board" className="text-[10px] font-semibold text-muted-foreground uppercase">Target Board</Label>
-                  <Select value={draftBoardName} onValueChange={(val) => val && setDraftBoardName(val)} required>
-                    <SelectTrigger id="draft-board" className="h-8 rounded-lg text-xs bg-background/50 border-border/40">
-                      <SelectValue placeholder="Choose board..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accessibleBoards.map((b) => (
-                        <SelectItem key={b.id} value={b.name}>
-                          {b.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-1.5">
-                  <Label htmlFor="draft-title" className="text-[10px] font-semibold text-muted-foreground uppercase">Task Outline</Label>
-                  <div className="flex gap-1.5">
-                    <Input 
-                      id="draft-title"
-                      placeholder="e.g. Design assets banner..." 
-                      value={draftTitle}
-                      onChange={(e) => setDraftTitle(e.target.value)}
-                      className="h-8 text-xs bg-background/50 border-border/40 flex-1"
-                      required
-                    />
-                    <Button type="submit" size="sm" className="h-8 rounded-lg px-3">
-                      <Plus className="h-4.5 w-4.5 mr-1" /> Draft
-                    </Button>
-                  </div>
-                </div>
-              </form>
             </CardContent>
           </Card>
 

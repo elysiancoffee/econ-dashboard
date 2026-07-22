@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Calendar, User, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { notFound } from "next/navigation";
 
 export default function LogsPage() {
   const { logs, users, currentUser } = useApp();
@@ -14,6 +15,10 @@ export default function LogsPage() {
   const [filterUser, setFilterUser] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  if (currentUser.role !== "Boss") {
+      notFound();
+    }
 
   // Reset page when filters change
   useEffect(() => {
