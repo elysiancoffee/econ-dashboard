@@ -69,9 +69,10 @@ export default function ItemPollResultsGenerator() {
 
     const itemResults = validItems
       .map((item) => {
+        // Replaced Gold #e1bc28 & Text #926766 with the new Theme Colors
         const color = topThreeIndexes.has(item.index)
-          ? "#e1bc28"
-          : "#926766";
+          ? "#9d953e"
+          : "#bcbcbc";
 
         const voteLabel =
           item.voteCount === 1 ? "vote" : "votes";
@@ -80,39 +81,39 @@ export default function ItemPollResultsGenerator() {
       })
       .join("\n");
 
-    return `[center][img]https://i.imgur.com/5CRL98n.png[/img]
+    return `[center][img]https://elysiancoffee.github.io/uploads/item-poll-june26.gif[/img]
 
-[b][size=4][color=#bf464b]ROUND ${round} - RESULTS[/color][/size][/b]
-[color=#a68b9d]Theme: ${theme}[/color]
+[b][size=4][color=#9d953e]ROUND ${round} - RESULTS[/color][/size][/b]
+[color=#4f6f9d]Theme: ${theme}[/color]
 
-[hr][color=#e1bc28]Total Voters: ${totalVoters} voters
+[hr][color=#9d953e]Total Voters: ${totalVoters} voters
 (Items in gold color denotes the 3 most voted items)[/color]
 
 ${itemResults}
 
-[Color=#a68b9d]Total Votes: ${totalVotes} votes[/color]
+[color=#4f6f9d]Total Votes: ${totalVotes} votes[/color]
 
-[hr][b][size=3][color=#bf464b]W I N N E R S [/color][/size][/b]
+[hr][b][size=3][color=#9d953e]W I N N E R S [/color][/size][/b]
 
-[color=#926766]All users who voted 3 out of 3 most desirable items will get:
+[color=#bcbcbc]All users who voted 3 out of 3 most desirable items will get:
 [img]https://img.hexrpg.com/images/items/giftcard50k.png[/img][/color]
 [color=white]
 ${threeOfThree}
 [/color]
 
-[color=#926766]All users who voted 2 out of 3 most desirable items will get:
+[color=#bcbcbc]All users who voted 2 out of 3 most desirable items will get:
 [img]https://img.hexrpg.com/images/items/giftcard25k.png[/img][/color]
 [color=white]
 ${twoOfThree}
 [/color]
 
-[color=#926766]All users who voted 1 out of 3 most desirable items will get:
+[color=#bcbcbc]All users who voted 1 out of 3 most desirable items will get:
 [img]https://img.hexrpg.com/images/items/giftcard10k.png[/img][/color]
 [color=white]
 ${oneOfThree}
 [/color]
 
-[color=#926766]Your prizes will be sent to you shortly by the club. Congratulations! Please keep this thread on watch for the next poll. [/color][/center]
+[color=#4f6f9d]Your prizes will be sent to you shortly by the club. Congratulations! Please keep this thread on watch for the next poll. [/color][/center]
 
 [size=2][color=white]Edited by CrimsonCurse[/color][/size]`;
   }, [
