@@ -40,7 +40,8 @@ export default function LogsPage() {
 
   const startIndex = (activePage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalEntries);
-  const paginatedLogs = filteredLogs.slice(startIndex, endIndex);
+  const sortedLogs = [...filteredLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const paginatedLogs = sortedLogs.slice(startIndex, endIndex);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">

@@ -382,14 +382,14 @@ export default function GalleryPage() {
       {/* Gallery Content - Grid View */}
       {!loading && processedImages.length > 0 && viewMode === "grid" && (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {processedImages.map((image) => {
+          {processedImages.map((image, index) => {
             const isDeleting = deletingSha === image.sha;
             const isCopied = copiedSha === image.sha;
             const ext = image.name.split(".").pop()?.toUpperCase() || "IMG";
 
             return (
               <div
-                key={image.sha}
+                key={`${image.sha}-${index}`}
                 onClick={() => {
                   if (!isDeleting) {
                     setSelectedImage(image);
@@ -471,13 +471,13 @@ export default function GalleryPage() {
       {/* Gallery Content - List View */}
       {!loading && processedImages.length > 0 && viewMode === "list" && (
         <div className="space-y-2">
-          {processedImages.map((image) => {
+          {processedImages.map((image, index) => {
             const isDeleting = deletingSha === image.sha;
             const isCopied = copiedSha === image.sha;
 
             return (
               <div
-                key={image.sha}
+                key={`${image.sha}-${index}`}
                 onClick={() => {
                   if (!isDeleting) {
                     setSelectedImage(image);

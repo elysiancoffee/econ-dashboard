@@ -5,15 +5,16 @@ import * as schema from "./db/schema";
 import { eq } from "drizzle-orm";
 
 export async function fetchInitialData() {
-  const [users, boards, tasks, submissions, logs, shortcuts] = await Promise.all([
+  const [users, boards, tasks, submissions, logs, shortcuts, notifications] = await Promise.all([
     db.select().from(schema.users),
     db.select().from(schema.boards),
     db.select().from(schema.tasks),
     db.select().from(schema.submissions),
     db.select().from(schema.logs),
     db.select().from(schema.shortcuts),
+    db.select().from(schema.notifications),
   ]);
-  return { users, boards, tasks, submissions, logs, shortcuts };
+  return { users, boards, tasks, submissions, logs, shortcuts, notifications };
 }
 
 export async function dbAddUser(username: string, role: string, passwordHash: string) {
@@ -69,6 +70,18 @@ export async function dbAddTask(task: {
     recurrence: task.recurrence || "none",
     recurrenceParentId: task.recurrenceParentId || null,
   });
+
+  // Create notification
+  const notifId = `n-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  await db.insert(schema.notifications).values({
+    id: notifId,
+    userId: task.assignedUserId,
+    taskId: id,
+    message: `You have been assigned a new task: "${task.title}"`,
+    isRead: false,
+    createdAt: new Date().toISOString(),
+  });
+
   return id;
 }
 
@@ -101,6 +114,20 @@ export async function dbAddTasks(tasksList: {
   });
 
   await db.insert(schema.tasks).values(insertedTasks);
+
+  // Insert notifications for all inserted tasks
+  const notifs = insertedTasks.map((t, idx) => ({
+    id: `n-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+    userId: t.assignedUserId,
+    taskId: t.id,
+    message: `You have been assigned a new task: "${t.title}"`,
+    isRead: false,
+    createdAt: new Date().toISOString(),
+  }));
+  if (notifs.length > 0) {
+    await db.insert(schema.notifications).values(notifs);
+  }
+
   return insertedTasks.map((t) => t.id);
 }
 
@@ -117,6 +144,9 @@ export async function dbUpdateTask(task: {
   recurrence?: string;
   recurrenceParentId?: string | null;
 }) {
+  const existing = await db.select().from(schema.tasks).where(eq(schema.tasks.id, task.id)).limit(1);
+  const oldAssignee = existing[0]?.assignedUserId;
+
   await db.update(schema.tasks).set({
     boardId: task.boardId,
     title: task.title,
@@ -129,6 +159,18 @@ export async function dbUpdateTask(task: {
     recurrence: task.recurrence || "none",
     recurrenceParentId: task.recurrenceParentId || null,
   }).where(eq(schema.tasks.id, task.id));
+
+  if (oldAssignee && oldAssignee !== task.assignedUserId) {
+    const notifId = `n-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    await db.insert(schema.notifications).values({
+      id: notifId,
+      userId: task.assignedUserId,
+      taskId: task.id,
+      message: `You have been assigned a task (reassigned): "${task.title}"`,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+  }
 }
 
 export async function dbDeleteTask(id: string) {
@@ -172,4 +214,21 @@ export async function dbAddShortcut(userId: string, title: string, url: string) 
 
 export async function dbDeleteShortcut(id: string) {
   await db.delete(schema.shortcuts).where(eq(schema.shortcuts.id, id));
+}
+
+export async function dbAddNotification(userId: string, taskId: string | null, message: string) {
+  const id = `n-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  await db.insert(schema.notifications).values({
+    id,
+    userId,
+    taskId,
+    message,
+    isRead: false,
+    createdAt: new Date().toISOString(),
+  });
+  return id;
+}
+
+export async function dbMarkNotificationAsRead(id: string) {
+  await db.update(schema.notifications).set({ isRead: true }).where(eq(schema.notifications.id, id));
 }

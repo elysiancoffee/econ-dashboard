@@ -16,7 +16,7 @@ import {
   Globe, FileText, CheckSquare, Eye, RefreshCw, Repeat, ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, isTaskVisible, isCurrentMonthTask } from "@/lib/utils";
 import { CalendarPicker } from "@/components/ui/calendar-picker";
 import { MultiUserDropdown } from "@/components/ui/multi-user-dropdown";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -63,8 +63,8 @@ export default function Dashboard() {
     setSelectedViewingUserName(currentUser.username);
   }, [currentUser]);
 
-  // Tasks assigned to viewed user
-  const userTasks = tasks.filter((t) => t.assignedUserId === viewedUser.id);
+  // Tasks assigned to viewed user (filtered by visibility rule)
+  const userTasks = tasks.filter((t) => t.assignedUserId === viewedUser.id && isTaskVisible(t.dueDate));
   
   // Sort: tasks with due dates first (closest first), followed by no due date
   const sortedTasks = [...userTasks].sort((a, b) => {
@@ -73,13 +73,42 @@ export default function Dashboard() {
     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
 
-  // Calculate metrics
-  const activeTasks = userTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
-  const completedTasks = userTasks.filter((t) => t.status === "Completed");
+  // Active period tasks (Current month's tasks + next month's early tasks if today is >= 23rd)
+  const activePeriodTasks = userTasks.filter((t) => {
+    if (!t.dueDate) return false;
+    const parts = t.dueDate.split("-").map(Number);
+    if (parts.length !== 3) return false;
+    const [ty, tm, td] = parts;
+    const today = new Date();
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth();
+    const todayDay = today.getDate();
+
+    if (ty === todayYear && (tm - 1) === todayMonth) {
+      return true;
+    }
+    if (todayDay >= 23) {
+      let nextMonth = todayMonth + 1;
+      let nextMonthYear = todayYear;
+      if (nextMonth > 11) {
+        nextMonth = 0;
+        nextMonthYear += 1;
+      }
+      if (ty === nextMonthYear && (tm - 1) === nextMonth && td <= 10) {
+        return true;
+      }
+    }
+    return false;
+  });
+
+  const activeTasks = activePeriodTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+  const completedTasks = activePeriodTasks.filter((t) => t.status === "Completed");
   const pendingTasksCount = activeTasks.length;
   const completedTasksCount = completedTasks.length;
   const criticalTasksCount = activeTasks.filter((t) => t.priority === "Critical" || t.priority === "High").length;
-  const completionRate = userTasks.length > 0 ? Math.round((completedTasksCount / userTasks.length) * 100) : 0;
+  const completionRate = activePeriodTasks.length > 0 ? Math.round((completedTasksCount / activePeriodTasks.length) * 100) : 0;
+
+  const currentMonthWorkloadCount = activePeriodTasks.length;
 
   // Task Editing Modal state
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -391,15 +420,28 @@ export default function Dashboard() {
       </div>
 
       {/* Metrics Row */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-border/30 bg-card/30 backdrop-blur-xs">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Card className="border-border/30 bg-card/30 backdrop-blur-xs lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Workload</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-extrabold">{userTasks.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Total assigned tasks</p>
+          <CardContent className="grid grid-cols-2 gap-3 pt-1">
+            <div className="bg-background/25 border border-border/15 p-2.5 rounded-xl flex flex-col justify-between">
+              <div>
+                <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider">Total Assigned</span>
+                <div className="text-2xl font-extrabold mt-0.5">{userTasks.length}</div>
+              </div>
+              <p className="text-[9px] text-muted-foreground mt-1">Visible tasks</p>
+            </div>
+            
+            <div className="bg-background/25 border border-border/15 p-2.5 rounded-xl flex flex-col justify-between">
+              <div>
+                <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider">Current Month</span>
+                <div className="text-2xl font-extrabold mt-0.5 text-primary">{currentMonthWorkloadCount}</div>
+              </div>
+              <p className="text-[9px] text-muted-foreground mt-1">Due this period</p>
+            </div>
           </CardContent>
         </Card>
         
@@ -446,8 +488,8 @@ export default function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-3">
         
         {/* Left Column: Tasks Queue Table (2 columns wide) */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="border-border/40 bg-card/60 backdrop-blur-md shadow-md h-full flex flex-col">
+        <div className="lg:col-span-2 space-y-6 min-w-0 overflow-hidden">
+          <Card className="border-border/40 bg-card/60 backdrop-blur-md shadow-md h-full flex flex-col w-full overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between border-b border-border/40 pb-4">
               <div>
                 <CardTitle className="text-lg">Tasks Queue</CardTitle>

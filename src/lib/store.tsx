@@ -18,9 +18,20 @@ import {
   dbAddLog,
   dbAddShortcut,
   dbDeleteShortcut,
+  dbAddNotification,
+  dbMarkNotificationAsRead,
 } from "./actions";
 
 export type Role = "Boss" | "Underboss" | "Bagman" | "Consigliere" | "Associate" | "Custodian";
+
+export interface Notification {
+  id: string;
+  userId: string;
+  taskId: string | null;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
 
 export interface User {
   id: string;
@@ -81,6 +92,7 @@ interface AppContextType {
   submissions: BlackChipSubmission[];
   logs: LogEntry[];
   shortcuts: Shortcut[];
+  notifications: Notification[];
   setCurrentUser: (user: User) => void;
   addUser: (username: string, role: Role, password?: string) => void;
   deleteUser: (id: string) => void;
@@ -98,6 +110,7 @@ interface AppContextType {
   logoutUser: () => void;
   addShortcut: (title: string, url: string) => void;
   deleteShortcut: (id: string) => void;
+  markNotificationAsRead: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -115,6 +128,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [submissions, setSubmissions] = useState<BlackChipSubmission[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [shortcuts, setShortcuts] = useState<Shortcut[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
   const handleSetRealUser = (user: User) => {
@@ -133,6 +147,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setSubmissions(data.submissions as BlackChipSubmission[]);
         setLogs(data.logs as LogEntry[]);
         setShortcuts((data.shortcuts || []) as Shortcut[]);
+        setNotifications((data.notifications || []) as Notification[]);
 
         // Determine the real user
         let initialRealUser: User | null = null;
@@ -308,6 +323,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         commentsCount: 0,
       };
       setTasks((prev) => [...prev, newTask]);
+      
+      const newNotif: Notification = {
+        id: `n-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        userId: taskInput.assignedUserId,
+        taskId: newId,
+        message: `You have been assigned a new task: "${taskInput.title}"`,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      };
+      setNotifications((prev) => [...prev, newNotif]);
+
       await addLog(`Created task: "${newTask.title}"`);
     } catch (err) {
       console.error("Failed to add task:", err);
@@ -323,6 +349,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         commentsCount: 0,
       }));
       setTasks((prev) => [...prev, ...newTasks]);
+
+      const newNotifs: Notification[] = newTasks.map((t, idx) => ({
+        id: `n-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+        userId: t.assignedUserId,
+        taskId: t.id,
+        message: `You have been assigned a new task: "${t.title}"`,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      }));
+      setNotifications((prev) => [...prev, ...newNotifs]);
+
       await addLog(`Created ${newTasks.length} recurring tasks: "${newTasks[0]?.title}"`);
     } catch (err) {
       console.error("Failed to add recurring tasks:", err);
@@ -331,8 +368,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateTask = async (updatedTask: Task) => {
     try {
+      const oldTask = tasks.find((t) => t.id === updatedTask.id);
       await dbUpdateTask(updatedTask);
       setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+
+      if (oldTask && oldTask.assignedUserId !== updatedTask.assignedUserId) {
+        const newNotif: Notification = {
+          id: `n-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          userId: updatedTask.assignedUserId,
+          taskId: updatedTask.id,
+          message: `You have been assigned a task (reassigned): "${updatedTask.title}"`,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+        };
+        setNotifications((prev) => [...prev, newNotif]);
+      }
+
       await addLog(`Updated task: "${updatedTask.title}"`);
     } catch (err) {
       console.error("Failed to update task:", err);
@@ -348,6 +399,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await addLog(`Deleted task: "${targetTask.title}"`);
     } catch (err) {
       console.error("Failed to delete task:", err);
+    }
+  };
+
+  const markNotificationAsRead = async (id: string) => {
+    try {
+      await dbMarkNotificationAsRead(id);
+      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
+    } catch (err) {
+      console.error("Failed to mark notification as read:", err);
     }
   };
 
@@ -432,6 +492,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         submissions,
         logs,
         shortcuts,
+        notifications,
         setCurrentUser: handleSetCurrentUser,
         addUser,
         deleteUser,
@@ -449,6 +510,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         logoutUser,
         addShortcut,
         deleteShortcut,
+        markNotificationAsRead,
       }}
     >
       {children}

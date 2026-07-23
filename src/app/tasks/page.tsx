@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useApp, Task, Board, Role } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import { cn, isTaskVisible } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -368,8 +368,8 @@ export default function TasksPage() {
       (b.allowedUsers && b.allowedUsers.includes(currentUser.id)),
   );
 
-  // Get tasks of active board
-  const boardTasks = tasks.filter((t) => t.boardId === activeBoardId);
+  // Get tasks of active board (filtered by visibility rule)
+  const boardTasks = tasks.filter((t) => t.boardId === activeBoardId && isTaskVisible(t.dueDate));
 
   // Current system date for Kanban / Table filtering
   const now = new Date();
@@ -383,7 +383,27 @@ export default function TasksPage() {
     activeTasks = boardTasks.filter((t) => {
       if (!t.dueDate) return false;
       const d = new Date(t.dueDate + "T00:00:00");
-      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      
+      const isCurrentMonth = d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      
+      let isNextMonthEarlyTask = false;
+      if (now.getDate() >= 23) {
+        let nextMonth = currentMonth + 1;
+        let nextMonthYear = currentYear;
+        if (nextMonth > 11) {
+          nextMonth = 0;
+          nextMonthYear += 1;
+        }
+        const parts = t.dueDate.split("-").map(Number);
+        if (parts.length === 3) {
+          const [ty, tm, td] = parts;
+          if (ty === nextMonthYear && (tm - 1) === nextMonth && td <= 10) {
+            isNextMonthEarlyTask = true;
+          }
+        }
+      }
+
+      return isCurrentMonth || isNextMonthEarlyTask;
     });
   } else if (view === "table") {
     const months = Number(tableRange);

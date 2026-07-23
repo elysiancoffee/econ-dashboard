@@ -92,3 +92,15 @@ export const shortcuts = pgTable("shortcuts", {
   title: text("title").notNull(),
   url: text("url").notNull(),
 });
+
+export const notifications = pgTable("notifications", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  taskId: text("task_id")
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  message: text("message").notNull(),
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: text("created_at").notNull(),
+});
