@@ -104,3 +104,10 @@ export const notifications = pgTable("notifications", {
   isRead: boolean("is_read").notNull().default(false),
   createdAt: text("created_at").notNull(),
 });
+
+export const chipsTrivia = pgTable("chips_trivia", {
+  id: text("id").primaryKey(),
+  visibilityFreq: integer("visibility_freq").notNull().default(1),
+  trivia: jsonb("trivia").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

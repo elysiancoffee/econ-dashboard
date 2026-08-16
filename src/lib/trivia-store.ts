@@ -1,5 +1,8 @@
 import fs from "fs";
 import path from "path";
+import { db } from "@/lib/db/client";
+import * as schema from "@/lib/db/schema";
+import { eq, sql } from "drizzle-orm";
 
 export interface TriviaItem {
   id: string;
@@ -73,59 +76,126 @@ const DEFAULT_STORE_DATA: TriviaStoreData = {
   trivia: DEFAULT_SAMPLE_TRIVIA,
 };
 
-function ensureDataFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(TRIVIA_FILE)) {
-    fs.writeFileSync(
-      TRIVIA_FILE,
-      JSON.stringify(DEFAULT_STORE_DATA, null, 2),
-      "utf-8"
-    );
+// In-memory fallback if both DB and filesystem are restricted
+let inMemoryStore: TriviaStoreData | null = null;
+let tableInitialized = false;
+
+async function ensureDbTable() {
+  if (tableInitialized) return;
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "chips_trivia" (
+        "id" text PRIMARY KEY NOT NULL,
+        "visibility_freq" integer DEFAULT 1 NOT NULL,
+        "trivia" jsonb NOT NULL,
+        "updated_at" text NOT NULL
+      );
+    `);
+    tableInitialized = true;
+  } catch (err) {
+    console.warn("Could not auto-create chips_trivia table:", err);
   }
 }
 
-export function getTriviaStoreData(): TriviaStoreData {
-  ensureDataFile();
+function readFromFile(): TriviaStoreData {
   try {
-    const raw = fs.readFileSync(TRIVIA_FILE, "utf-8");
-    const parsed = JSON.parse(raw);
+    if (fs.existsSync(TRIVIA_FILE)) {
+      const raw = fs.readFileSync(TRIVIA_FILE, "utf-8");
+      const parsed = JSON.parse(raw);
 
-    // Support object structure { visibilityFreq: 1, trivia: [...] }
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      const visibilityFreq =
-        typeof parsed.visibilityFreq === "number" && parsed.visibilityFreq >= 0
-          ? parsed.visibilityFreq
-          : 1;
-      const trivia = Array.isArray(parsed.trivia) ? parsed.trivia : DEFAULT_SAMPLE_TRIVIA;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const visibilityFreq =
+          typeof parsed.visibilityFreq === "number" && parsed.visibilityFreq >= 0
+            ? parsed.visibilityFreq
+            : 1;
+        const trivia = Array.isArray(parsed.trivia) ? parsed.trivia : DEFAULT_SAMPLE_TRIVIA;
+        return { visibilityFreq, trivia };
+      }
+
+      if (Array.isArray(parsed)) {
+        return {
+          visibilityFreq: 1,
+          trivia: parsed.length > 0 ? parsed : DEFAULT_SAMPLE_TRIVIA,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("File read note:", err);
+  }
+  return inMemoryStore || DEFAULT_STORE_DATA;
+}
+
+function writeToFile(data: TriviaStoreData) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(TRIVIA_FILE, JSON.stringify(data, null, 2), "utf-8");
+  } catch {
+    // Expected on Vercel serverless read-only filesystem; handled gracefully
+  }
+}
+
+export async function getTriviaStoreData(): Promise<TriviaStoreData> {
+  // 1. Try PostgreSQL Database first (Persistent on Vercel)
+  try {
+    await ensureDbTable();
+    const rows = await db
+      .select()
+      .from(schema.chipsTrivia)
+      .where(eq(schema.chipsTrivia.id, "main"))
+      .limit(1);
+
+    if (rows.length > 0) {
+      const row = rows[0];
+      const visibilityFreq = typeof row.visibilityFreq === "number" ? row.visibilityFreq : 1;
+      const trivia = Array.isArray(row.trivia) ? (row.trivia as unknown as TriviaItem[]) : DEFAULT_SAMPLE_TRIVIA;
+      inMemoryStore = { visibilityFreq, trivia };
       return { visibilityFreq, trivia };
     }
-
-    // Support legacy array structure [...]
-    if (Array.isArray(parsed)) {
-      return {
-        visibilityFreq: 1,
-        trivia: parsed.length > 0 ? parsed : DEFAULT_SAMPLE_TRIVIA,
-      };
-    }
-
-    return DEFAULT_STORE_DATA;
-  } catch (error) {
-    console.error("Error reading chips-trivia.json:", error);
-    return DEFAULT_STORE_DATA;
+  } catch (dbErr) {
+    console.warn("DB fetch fallback to file/memory:", dbErr);
   }
+
+  // 2. Fallback to file/memory
+  return readFromFile();
 }
 
-export function getTriviaList(): TriviaItem[] {
-  return getTriviaStoreData().trivia;
+export async function saveTriviaStoreData(data: TriviaStoreData): Promise<void> {
+  inMemoryStore = data;
+
+  // 1. Save to PostgreSQL Database (Primary persistent storage for Vercel)
+  try {
+    await ensureDbTable();
+    await db
+      .insert(schema.chipsTrivia)
+      .values({
+        id: "main",
+        visibilityFreq: data.visibilityFreq,
+        trivia: data.trivia,
+        updatedAt: new Date().toISOString(),
+      })
+      .onConflictDoUpdate({
+        target: schema.chipsTrivia.id,
+        set: {
+          visibilityFreq: data.visibilityFreq,
+          trivia: data.trivia,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+  } catch (dbErr) {
+    console.error("DB save error:", dbErr);
+  }
+
+  // 2. Also try saving to local filesystem if writable (e.g. in local development)
+  writeToFile(data);
 }
 
-export function saveTriviaStoreData(data: TriviaStoreData): void {
-  ensureDataFile();
-  fs.writeFileSync(TRIVIA_FILE, JSON.stringify(data, null, 2), "utf-8");
+export async function getTriviaList(): Promise<TriviaItem[]> {
+  const data = await getTriviaStoreData();
+  return data.trivia;
 }
 
-export function saveTriviaList(trivia: TriviaItem[], visibilityFreq = 1): void {
-  saveTriviaStoreData({ visibilityFreq, trivia });
+export async function saveTriviaList(trivia: TriviaItem[], visibilityFreq = 1): Promise<void> {
+  await saveTriviaStoreData({ visibilityFreq, trivia });
 }

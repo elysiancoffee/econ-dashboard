@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const isDownload = searchParams.get("download") === "true";
     const format = searchParams.get("format");
     const isManageMode = searchParams.get("manage") === "true";
-    const { visibilityFreq, trivia } = getTriviaStoreData();
+    const { visibilityFreq, trivia } = await getTriviaStoreData();
 
     // Direct JSON file download for admin export
     if (isDownload) {
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
         answer: typeof item.answer === "string" ? item.answer.trim() : "",
       }));
 
-    saveTriviaStoreData({
+    await saveTriviaStoreData({
       visibilityFreq,
       trivia: sanitized,
     });
