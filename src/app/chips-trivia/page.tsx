@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { useApp } from "@/lib/store";
 
 export interface TriviaItem {
   id: string;
@@ -25,6 +26,8 @@ export interface TriviaItem {
 }
 
 export default function RandomBlackChipsTrivia() {
+  const { currentUser } = useApp();
+  const isBoss = currentUser?.role === "Boss";
   const [triviaList, setTriviaList] = useState<TriviaItem[]>([]);
   const [visibilityFreq, setVisibilityFreq] = useState<number>(1);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -61,8 +64,12 @@ export default function RandomBlackChipsTrivia() {
     fetchTrivia();
   }, []);
 
-  // Update visibility frequency
+  // Update visibility frequency (Boss only)
   const handleVisibilityFreqChange = (val: number) => {
+    if (!isBoss) {
+      toast.error("Only Bosses can edit visibility frequency.");
+      return;
+    }
     const safeVal = Math.max(0, Math.min(300, isNaN(val) ? 0 : val));
     setVisibilityFreq(safeVal);
     setHasUnsavedChanges(true);
@@ -102,8 +109,12 @@ export default function RandomBlackChipsTrivia() {
     }
   };
 
-  // Delete a specific row
+  // Delete a specific row (Boss only)
   const handleDeleteRow = (index: number) => {
+    if (!isBoss) {
+      toast.error("Only Bosses can delete trivia questions.");
+      return;
+    }
     setTriviaList((prev) => {
       const next = prev.filter((_, idx) => idx !== index);
       return next;
@@ -120,6 +131,7 @@ export default function RandomBlackChipsTrivia() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-user-role": currentUser?.role || "",
         },
         body: JSON.stringify({
           visibilityFreq,
@@ -228,13 +240,22 @@ export default function RandomBlackChipsTrivia() {
             type="number"
             min={0}
             max={300}
+            disabled={!isBoss}
             value={visibilityFreq}
             onChange={(e) => handleVisibilityFreqChange(parseInt(e.target.value, 10))}
-            className="w-16 h-7 font-mono text-xs text-center bg-background px-1"
+            className={`w-16 h-7 font-mono text-xs text-center px-1 ${
+              !isBoss
+                ? "bg-muted/50 text-muted-foreground border-border/50 cursor-not-allowed select-none shadow-none"
+                : "bg-background"
+            }`}
+            title={!isBoss ? "Only Bosses can edit Visibility Frequency" : "Adjust Visibility Frequency (0 - 300)"}
           />
           <span className="text-muted-foreground">
             / 300 (<span className="text-foreground font-medium">{appearancePercentage}%</span> chance)
           </span>
+          {!isBoss && (
+            <span className="text-[10px] text-muted-foreground/80 font-mono">(Boss only)</span>
+          )}
         </div>
 
         {/* Search & Add Question */}
@@ -275,15 +296,17 @@ export default function RandomBlackChipsTrivia() {
           <div className="col-span-2 sm:col-span-1 text-center font-mono">
             #
           </div>
-          <div className="col-span-5 sm:col-span-6 md:col-span-7">
+          <div className={isBoss ? "col-span-5 sm:col-span-6 md:col-span-7" : "col-span-6 sm:col-span-7 md:col-span-7"}>
             Question
           </div>
-          <div className="col-span-4 sm:col-span-4 md:col-span-3">
+          <div className={isBoss ? "col-span-4 sm:col-span-4 md:col-span-3" : "col-span-4 sm:col-span-4 md:col-span-4"}>
             Answer
           </div>
-          <div className="col-span-1 text-right pr-2">
-            Action
-          </div>
+          {isBoss && (
+            <div className="col-span-1 text-right pr-2">
+              Action
+            </div>
+          )}
         </div>
 
         {/* Table Body / Rows */}
@@ -328,7 +351,7 @@ export default function RandomBlackChipsTrivia() {
                   </div>
 
                   {/* Col 2: Wide Question Input */}
-                  <div className="col-span-5 sm:col-span-6 md:col-span-7">
+                  <div className={isBoss ? "col-span-5 sm:col-span-6 md:col-span-7" : "col-span-6 sm:col-span-7 md:col-span-7"}>
                     <Input
                       ref={(el) => {
                         questionInputRefs.current[idx] = el;
@@ -341,7 +364,7 @@ export default function RandomBlackChipsTrivia() {
                   </div>
 
                   {/* Col 3: Answer Box */}
-                  <div className="col-span-4 sm:col-span-4 md:col-span-3">
+                  <div className={isBoss ? "col-span-4 sm:col-span-4 md:col-span-3" : "col-span-4 sm:col-span-4 md:col-span-4"}>
                     <Input
                       value={item.answer}
                       onChange={(e) => handleItemChange(idx, "answer", e.target.value)}
@@ -356,18 +379,20 @@ export default function RandomBlackChipsTrivia() {
                     />
                   </div>
 
-                  {/* Col 4: Delete button */}
-                  <div className="col-span-1 flex items-center justify-end">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteRow(idx)}
-                      title={`Delete #${actualNumber}`}
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  {/* Col 4: Delete button (Bosses only) */}
+                  {isBoss && (
+                    <div className="col-span-1 flex items-center justify-end">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteRow(idx)}
+                        title={`Delete #${actualNumber}`}
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               );
             })

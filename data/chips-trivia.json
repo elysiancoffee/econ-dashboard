@@ -1,9 +1,54 @@
 {
-  "visibilityFreq": 300,
+  "visibilityFreq": 15,
   "trivia": [
     {
       "id": "1",
-      "question": "HOOOHAAA",
+      "question": "Which position has the most power in our ECON Family?",
+      "answer": "Boss"
+    },
+    {
+      "id": "2",
+      "question": "What position did Harry play on the Gryffindor Quidditch team?",
+      "answer": "Seeker"
+    },
+    {
+      "id": "3",
+      "question": "What did Dumbledore leave to Hermione in his will?",
+      "answer": "The Tales of Beedle the Bard"
+    },
+    {
+      "id": "4",
+      "question": "What does the word Omertà refer to in Mafia culture?",
+      "answer": "Code of silence"
+    },
+    {
+      "id": "5",
+      "question": "Who was known as The Teflon Don because charges against him never stuck?",
+      "answer": "John Gotti"
+    },
+    {
+      "id": "6",
+      "question": "What is the Mafia term for a boss of bosses?",
+      "answer": "Capo di tutti capi"
+    },
+    {
+      "id": "7",
+      "question": "Which vault number held the Philosopher’s Stone at Gringotts?",
+      "answer": "Vault 713"
+    },
+    {
+      "id": "8",
+      "question": "Who founded the “Commission” (La Commissione) to organize the American Mafia families?",
+      "answer": "Charles \"Lucky\" Luciano"
+    },
+    {
+      "id": "9",
+      "question": "What is the name of the incentive that mainly powers our ECON Pricing Sheet Database?",
+      "answer": "Black Chips"
+    },
+    {
+      "id": "10",
+      "question": "According to our La Nostra Omertá, are you allowed to make game threads inside the club?",
       "answer": "No"
     }
   ]

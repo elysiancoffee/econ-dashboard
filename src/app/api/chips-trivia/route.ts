@@ -104,9 +104,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const userRole = request.headers.get("x-user-role") || "";
+    const isBoss = userRole === "Boss";
+
     const body = await request.json();
+    const currentStore = await getTriviaStoreData();
     let triviaData: any[] = [];
-    let visibilityFreq = 1;
+    let visibilityFreq = currentStore.visibilityFreq;
 
     if (Array.isArray(body)) {
       triviaData = body;
@@ -121,8 +125,20 @@ export async function POST(request: NextRequest) {
         }));
       }
 
+      // Only Bosses can change visibilityFreq on the server
       if (typeof body.visibilityFreq === "number" && body.visibilityFreq >= 0) {
-        visibilityFreq = body.visibilityFreq;
+        if (body.visibilityFreq !== currentStore.visibilityFreq && !isBoss) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "Unauthorized. Only Bosses can modify visibility frequency.",
+            },
+            { status: 403, headers: corsHeaders }
+          );
+        }
+        if (isBoss) {
+          visibilityFreq = body.visibilityFreq;
+        }
       }
     } else {
       return NextResponse.json(
