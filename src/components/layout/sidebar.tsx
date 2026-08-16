@@ -17,6 +17,7 @@ import {
   ImageIcon,
   Wand2,
   ImageUp,
+  HelpCircle,
 } from "lucide-react";
 
 import { useApp } from "@/lib/store";
@@ -25,6 +26,7 @@ const navItems = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Black Chips", href: "/black-chips", icon: HandCoins },
+  { name: "Chips Trivia", href: "/chips-trivia", icon: HelpCircle },
   { name: "Image Host", href: "/img-host", icon: ImageUp },
   { name: "Gallery", href: "/gallery", icon: ImageIcon },
   { name: "Templates", href: "/templates", icon: LayoutTemplate },
