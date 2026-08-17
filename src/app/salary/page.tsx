@@ -181,7 +181,7 @@ export default function SalaryPage() {
           <Calendar className="h-4 w-4 text-muted-foreground" />
           <span className="text-xs font-semibold text-muted-foreground">Select Month:</span>
           <Select value={selectedMonth} onValueChange={(val) => val && setSelectedMonth(val)}>
-            <SelectTrigger className="w-[180px] h-7 border-none bg-transparent shadow-none focus:ring-0 p-0 text-xs font-bold text-primary">
+            <SelectTrigger className="w-[180px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

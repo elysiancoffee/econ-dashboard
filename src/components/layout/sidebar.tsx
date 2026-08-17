@@ -18,6 +18,7 @@ import {
   Wand2,
   ImageUp,
   HelpCircle,
+  Swords,
 } from "lucide-react";
 
 import { useApp } from "@/lib/store";
@@ -30,6 +31,7 @@ const navItems = [
   { name: "Image Host", href: "/img-host", icon: ImageUp },
   { name: "Gallery", href: "/gallery", icon: ImageIcon },
   { name: "Templates", href: "/templates", icon: LayoutTemplate },
+  { name: "Mafia Games", href: "/mafia", icon: Swords },
   // { name: "PSD Editor", href: "/psd-editor", icon: Wand2 },
   // { name: "Logs", href: "/logs", icon: ScrollText },
   { name: "Settings", href: "/settings", icon: Settings },
@@ -56,7 +58,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       <aside
         className={cn(
-          "w-64 border-r bg-sidebar flex-shrink-0 flex flex-col min-h-screen",
+          "w-64 border-r bg-sidebar flex-shrink-0 flex flex-col h-screen",
           "fixed inset-y-0 left-0 z-50 lg:sticky lg:top-0",
           "transition-transform duration-300 ease-in-out",
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
@@ -72,7 +74,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
       
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;

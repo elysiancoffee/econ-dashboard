@@ -1,11 +1,9 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import * as dotenv from "dotenv";
 import * as schema from "./schema";
 
-dotenv.config({ path: ".env.local" });
+const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL || "";
 
-const connectionString = process.env.POSTGRES_URL!;
 
 // Prevent multiple database connection pools in development hot-reloading
 const globalForDb = globalThis as unknown as {

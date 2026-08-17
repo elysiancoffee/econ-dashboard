@@ -1,6 +1,7 @@
 "use client";
 
-import { Bell, Search, Plus, UserCheck, Menu, AlertCircle } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { Bell, Search, UserCheck, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useApp } from "@/lib/store";
@@ -15,13 +16,75 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface TopNavProps {
   onMenuClick: () => void;
 }
 
+// Stable role-based avatar colors so each role always gets the same hue
+const roleColors: Record<string, string> = {
+  Boss:        "bg-rose-500/20 text-rose-400 ring-rose-500/40",
+  Underboss:   "bg-orange-500/20 text-orange-400 ring-orange-500/40",
+  Bagman:      "bg-amber-500/20 text-amber-400 ring-amber-500/40",
+  Consigliere: "bg-violet-500/20 text-violet-400 ring-violet-500/40",
+  Associate:   "bg-sky-500/20 text-sky-400 ring-sky-500/40",
+  Custodian:   "bg-slate-500/20 text-slate-400 ring-slate-500/40",
+};
+
+function getInitials(username: string) {
+  return username.slice(0, 2).toUpperCase();
+}
+
+const MAX_VISIBLE = 5;
+
 export function TopNav({ onMenuClick }: TopNavProps) {
-  const { currentUser, realUser, users, setCurrentUser, notifications, tasks, markNotificationAsRead } = useApp();
+  const { currentUser, realUser, users, setCurrentUser, notifications, tasks, markNotificationAsRead, onlineUsers } = useApp();
+
+  // ── Arrival detection & sound ──
+  const swooshRef = useRef<HTMLAudioElement | null>(null);
+  const prevOnlineIdsRef = useRef<Set<string>>(new Set());
+  const isInitialRef = useRef(true);
+  const [animatingIds, setAnimatingIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    swooshRef.current = new Audio("/swoosh.mp3");
+    swooshRef.current.volume = 0.5;
+  }, []);
+
+  useEffect(() => {
+    const currentIds = new Set(onlineUsers.map((u) => u.id));
+    const prev = prevOnlineIdsRef.current;
+
+    if (!isInitialRef.current) {
+      // Detect users who just came online
+      const arrivals = onlineUsers.filter((u) => !prev.has(u.id));
+      if (arrivals.length > 0) {
+        // Play sound once for any new arrival
+        swooshRef.current?.play().catch(() => {});
+        // Mark them for the slide-in animation
+        const ids = new Set(arrivals.map((u) => u.id));
+        setAnimatingIds((prev) => new Set([...prev, ...ids]));
+        // Clear animation flag after it completes
+        setTimeout(() => {
+          setAnimatingIds((prev) => {
+            const next = new Set(prev);
+            ids.forEach((id) => next.delete(id));
+            return next;
+          });
+        }, 600);
+      }
+    } else {
+      isInitialRef.current = false;
+    }
+
+    prevOnlineIdsRef.current = currentIds;
+  }, [onlineUsers]);
 
   // 1. Dynamic "due soon" sticky notifications for current user
   const dueSoonTasks = tasks.filter((t) => 
@@ -50,6 +113,9 @@ export function TopNav({ onMenuClick }: TopNavProps) {
     ...unreadDbNotifs.map((n) => ({ ...n, isSticky: false }))
   ];
 
+  const visibleOnline = onlineUsers.slice(0, MAX_VISIBLE);
+  const overflowCount = onlineUsers.length - MAX_VISIBLE;
+
   return (
     <header className="h-16 border-b bg-background flex items-center justify-between px-6 sticky top-0 z-30">
       <div className="flex items-center gap-4 flex-1">
@@ -68,6 +134,58 @@ export function TopNav({ onMenuClick }: TopNavProps) {
       </div>
       
       <div className="flex items-center gap-4">
+
+        {/* ── Online users avatar group ── */}
+        {onlineUsers.length > 0 && (
+          <div className="hidden md:flex items-center">
+            <div className="flex items-center -space-x-2">
+              {visibleOnline.map((u) => {
+                const colorClass = roleColors[u.role] ?? roleColors["Custodian"];
+                const isNew = animatingIds.has(u.id);
+                return (
+                  <Tooltip key={u.id}>
+                    <TooltipTrigger className="cursor-default bg-transparent border-0 p-0">
+                      <div
+                        className={[
+                          "relative",
+                          isNew
+                            ? "animate-in slide-in-from-right-3 fade-in duration-500"
+                            : "",
+                        ].join(" ")}
+                      >
+                        <Avatar className={`h-8 w-8 ring-2 ring-background ${colorClass} transition-transform hover:scale-110 hover:z-10 hover:-translate-y-0.5`}>
+                          <AvatarFallback className={`text-[11px] font-semibold ${colorClass}`}>
+                            {getInitials(u.username)}
+                          </AvatarFallback>
+                        </Avatar>
+                        {/* Online dot */}
+                        <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background${isNew ? " animate-ping-once" : ""}`} />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs">
+                      <span className="font-semibold">@{u.username}</span>
+                      <span className="text-muted-foreground ml-1">· {u.role}</span>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+
+              {overflowCount > 0 && (
+                <Tooltip>
+                  <TooltipTrigger className="cursor-default bg-transparent border-0 p-0">
+                    <div className="relative h-8 w-8 rounded-full bg-muted/60 ring-2 ring-background flex items-center justify-center hover:scale-110 transition-transform">
+                      <span className="text-[11px] font-semibold text-muted-foreground">+{overflowCount}</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {onlineUsers.slice(MAX_VISIBLE).map((u) => `@${u.username}`).join(", ")}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="relative hidden md:flex items-center">
           <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
           <Input 
@@ -169,3 +287,4 @@ export function TopNav({ onMenuClick }: TopNavProps) {
     </header>
   );
 }
+

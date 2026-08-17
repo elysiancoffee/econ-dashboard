@@ -24,19 +24,28 @@ export function LoginForm({
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { loginUser } = useApp();
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password) return;
+    if (!username.trim() || !password || isSubmitting) return;
 
-    const success = loginUser(username, password);
-    if (success) {
-      toast.success("Successfully logged in.");
-      router.push("/");
-    } else {
-      toast.error("Invalid username or password.");
+    setIsSubmitting(true);
+    try {
+      const success = await loginUser(username, password);
+      if (success) {
+        toast.success("Successfully logged in.");
+        router.push("/");
+        router.refresh();
+      } else {
+        toast.error("Invalid username or password.");
+      }
+    } catch {
+      toast.error("An error occurred during login.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -64,6 +73,7 @@ export function LoginForm({
               placeholder="Enter your username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              disabled={isSubmitting}
               required
             />
           </Field>
@@ -76,6 +86,7 @@ export function LoginForm({
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={isSubmitting}
                 required
                 className="pr-10"
               />
@@ -95,11 +106,14 @@ export function LoginForm({
             </div>
           </Field>
           <Field>
-            <Button type="submit">Login</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Authenticating..." : "Login"}
+            </Button>
           </Field>
           <FieldSeparator></FieldSeparator>
         </FieldGroup>
       </form>
+
       <FieldDescription className="px-6 text-center">
         If you have any issues logging in, please contact owl <a href="#">Ri</a>, <a href="#">Kia</a> or <a href="#">Olympia</a>.
       </FieldDescription>

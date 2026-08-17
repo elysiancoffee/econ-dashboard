@@ -53,12 +53,12 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-background overflow-hidden relative">
+    <div className="flex h-screen w-full bg-background overflow-hidden relative">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopNav onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto bg-background/50 p-6 md:p-8">
-          <div className="mx-auto h-full w-full max-w-7xl">{children}</div>
+        <main className="flex-1 overflow-y-auto bg-background/50 p-6 md:p-8 pb-8 md:pb-10">
+          <div className="mx-auto w-full max-w-7xl pb-4">{children}</div>
         </main>
       </div>
     </div>

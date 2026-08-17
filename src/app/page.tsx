@@ -404,8 +404,8 @@ export default function Dashboard() {
               value={selectedViewingUserName} 
               onValueChange={(val) => val && setSelectedViewingUserName(val)}
             >
-              <SelectTrigger className="w-[180px] h-7 border-none bg-transparent shadow-none focus:ring-0 p-0 text-xs font-bold text-primary ps-3">
-                <SelectValue />
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select workspace" />
               </SelectTrigger>
               <SelectContent>
                 {users.map((u) => (
@@ -560,15 +560,40 @@ export default function Dashboard() {
                               value={task.status} 
                               onValueChange={(val) => val && handleStatusChange(task, val as any)}
                             >
-                              <SelectTrigger className={cn("h-7 w-[120px] text-[11px] font-semibold rounded-full border shadow-none", getStatusColor(task.status))}>
+                              <SelectTrigger className={cn("w-[130px] font-semibold text-xs rounded-full border shadow-none", getStatusColor(task.status))}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="Not Started">Not Started</SelectItem>
-                                <SelectItem value="In Progress">In Progress</SelectItem>
-                                <SelectItem value="Waiting">Waiting</SelectItem>
-                                <SelectItem value="Completed">Completed</SelectItem>
-                                <SelectItem value="Cancelled">Cancelled</SelectItem>
+                                <SelectItem value="Not Started" className="text-zinc-400 focus:text-zinc-300">
+                                  <span className="flex items-center gap-2 font-medium">
+                                    <span className="h-2 w-2 rounded-full bg-zinc-400" />
+                                    Not Started
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="In Progress" className="text-blue-500 focus:text-blue-400">
+                                  <span className="flex items-center gap-2 font-medium">
+                                    <span className="h-2 w-2 rounded-full bg-blue-500" />
+                                    In Progress
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="Waiting" className="text-amber-500 focus:text-amber-400">
+                                  <span className="flex items-center gap-2 font-medium">
+                                    <span className="h-2 w-2 rounded-full bg-amber-500" />
+                                    Waiting
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="Completed" className="text-emerald-500 focus:text-emerald-400">
+                                  <span className="flex items-center gap-2 font-medium">
+                                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                                    Completed
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="Cancelled" className="text-rose-500 focus:text-rose-400">
+                                  <span className="flex items-center gap-2 font-medium">
+                                    <span className="h-2 w-2 rounded-full bg-rose-500" />
+                                    Cancelled
+                                  </span>
+                                </SelectItem>
                               </SelectContent>
                             </Select>
                           </td>
@@ -828,9 +853,9 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="task-priority">Priority</Label>
-                  <Select value={editPriority} onValueChange={(val) => setEditPriority(val as any)}>
-                    <SelectTrigger id="task-priority">
-                      <SelectValue />
+                  <Select value={editPriority} onValueChange={(val) => val && setEditPriority(val as any)}>
+                    <SelectTrigger id="task-priority" className="w-full">
+                      <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Low">Low</SelectItem>
@@ -842,16 +867,41 @@ export default function Dashboard() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="task-status">Status</Label>
-                  <Select value={editStatus} onValueChange={(val) => setEditStatus(val as any)}>
-                    <SelectTrigger id="task-status">
-                      <SelectValue />
+                  <Select value={editStatus} onValueChange={(val) => val && setEditStatus(val as any)}>
+                    <SelectTrigger id="task-status" className="w-full">
+                      <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Not Started">Not Started</SelectItem>
-                      <SelectItem value="In Progress">In Progress</SelectItem>
-                      <SelectItem value="Waiting">Waiting</SelectItem>
-                      <SelectItem value="Completed">Completed</SelectItem>
-                      <SelectItem value="Cancelled">Cancelled</SelectItem>
+                      <SelectItem value="Not Started" className="text-zinc-400 focus:text-zinc-300">
+                        <span className="flex items-center gap-2 font-medium">
+                          <span className="h-2 w-2 rounded-full bg-zinc-400" />
+                          Not Started
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="In Progress" className="text-blue-500 focus:text-blue-400">
+                        <span className="flex items-center gap-2 font-medium">
+                          <span className="h-2 w-2 rounded-full bg-blue-500" />
+                          In Progress
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="Waiting" className="text-amber-500 focus:text-amber-400">
+                        <span className="flex items-center gap-2 font-medium">
+                          <span className="h-2 w-2 rounded-full bg-amber-500" />
+                          Waiting
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="Completed" className="text-emerald-500 focus:text-emerald-400">
+                        <span className="flex items-center gap-2 font-medium">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                          Completed
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="Cancelled" className="text-rose-500 focus:text-rose-400">
+                        <span className="flex items-center gap-2 font-medium">
+                          <span className="h-2 w-2 rounded-full bg-rose-500" />
+                          Cancelled
+                        </span>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

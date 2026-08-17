@@ -3,6 +3,7 @@ dotenv.config({ path: ".env.local" });
 
 import { db } from "../../../index";
 import * as schema from "./schema";
+import bcrypt from "bcryptjs";
 
 const DEFAULT_ROLES = [
   { id: "r-1", name: "Boss" },
@@ -12,12 +13,13 @@ const DEFAULT_ROLES = [
   { id: "r-5", name: "Custodian" },
 ];
 
-const DEFAULT_USERS = [
-  { id: "u-1", username: "admin", role: "Boss", password: "password" },
-];
-
 async function main() {
   console.log("🌱 Seeding database...");
+
+  const adminHashedPassword = await bcrypt.hash("password", 10);
+  const DEFAULT_USERS = [
+    { id: "u-1", username: "admin", role: "Boss", password: adminHashedPassword },
+  ];
 
   // Clean old data
   console.log("Cleaning old data...");
@@ -37,6 +39,7 @@ async function main() {
   // Insert users
   console.log("Inserting users...");
   await db.insert(schema.users).values(DEFAULT_USERS);
+
 
   // Seeding logs is skipped to keep DB clean as requested
   console.log("No extra data seeded.");

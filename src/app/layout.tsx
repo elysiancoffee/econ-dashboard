@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { LayoutShell } from "@/components/layout/shell";
-import { Toaster } from "@/components/ui/sonner";
-import { AppProvider } from "@/lib/store";
+import { Providers } from "@/components/providers";
 import React from "react";
-import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
   title: "ECON Inner Circle",
@@ -19,18 +16,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <body className="min-h-full flex flex-col font-sans">
-        <AppProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <LayoutShell>{children}</LayoutShell>
-            <Toaster />
-          </ThemeProvider>
-        </AppProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
-}
+}

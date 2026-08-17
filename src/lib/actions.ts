@@ -3,10 +3,18 @@
 import { db } from "./db/client";
 import * as schema from "./db/schema";
 import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 export async function fetchInitialData() {
   const [users, boards, tasks, submissions, logs, shortcuts, notifications] = await Promise.all([
-    db.select().from(schema.users),
+    db
+      .select({
+        id: schema.users.id,
+        username: schema.users.username,
+        role: schema.users.role,
+        isOnline: schema.users.isOnline,
+      })
+      .from(schema.users),
     db.select().from(schema.boards),
     db.select().from(schema.tasks),
     db.select().from(schema.submissions),
@@ -17,11 +25,13 @@ export async function fetchInitialData() {
   return { users, boards, tasks, submissions, logs, shortcuts, notifications };
 }
 
-export async function dbAddUser(username: string, role: string, passwordHash: string) {
+export async function dbAddUser(username: string, role: string, passwordInput: string) {
   const id = `u-${Date.now()}`;
+  const passwordHash = await bcrypt.hash(passwordInput, 10);
   await db.insert(schema.users).values({ id, username, role, password: passwordHash });
   return id;
 }
+
 
 export async function dbDeleteUser(id: string) {
   await db.delete(schema.users).where(eq(schema.users.id, id));
@@ -29,6 +39,17 @@ export async function dbDeleteUser(id: string) {
 
 export async function dbUpdateUserRole(id: string, role: string) {
   await db.update(schema.users).set({ role }).where(eq(schema.users.id, id));
+}
+
+export async function dbSetUserOnline(id: string, online: boolean) {
+  await db.update(schema.users).set({ isOnline: online }).where(eq(schema.users.id, id));
+}
+
+export async function fetchOnlineUsers() {
+  return db
+    .select({ id: schema.users.id, username: schema.users.username, role: schema.users.role })
+    .from(schema.users)
+    .where(eq(schema.users.isOnline, true));
 }
 
 export async function dbAddBoard(name: string, allowedRoles: any, allowedUsers: any) {

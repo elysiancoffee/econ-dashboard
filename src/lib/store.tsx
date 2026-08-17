@@ -1,12 +1,15 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { useSession, signIn, signOut } from "next-auth/react";
 import { LoaderTwo } from "../components/ui/loader";
 import {
   fetchInitialData,
   dbAddUser,
   dbDeleteUser,
   dbUpdateUserRole,
+  dbSetUserOnline,
+  fetchOnlineUsers,
   dbAddBoard,
   dbDeleteBoard,
   dbUpdateBoard,
@@ -65,15 +68,15 @@ export interface BlackChipSubmission {
   id: string;
   username: string;
   amount: number;
-  notes?: string;
+  notes?: string | null;
   timestamp: string;
 }
 
 export interface LogEntry {
   id: string;
   action: string;
-  timestamp: string;
   username: string;
+  timestamp: string;
 }
 
 export interface Shortcut {
@@ -93,6 +96,7 @@ interface AppContextType {
   logs: LogEntry[];
   shortcuts: Shortcut[];
   notifications: Notification[];
+  onlineUsers: { id: string; username: string; role: string }[];
   setCurrentUser: (user: User) => void;
   addUser: (username: string, role: Role, password?: string) => void;
   deleteUser: (id: string) => void;
@@ -106,7 +110,7 @@ interface AppContextType {
   deleteTask: (id: string) => void;
   addSubmission: (username: string, amount: number, notes?: string) => void;
   addLog: (action: string) => void;
-  loginUser: (username: string, passwordInput: string) => boolean;
+  loginUser: (username: string, passwordInput: string) => Promise<boolean>;
   logoutUser: () => void;
   addShortcut: (title: string, url: string) => void;
   deleteShortcut: (id: string) => void;
@@ -116,6 +120,10 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const { data: session, status } = useSession();
+  // Track whether we've already logged "came online" for this session
+  const hasLoggedOnline = React.useRef(false);
+
   const [currentUser, setCurrentUser] = useState<User>({
     id: "loading",
     username: "Loading",
@@ -130,11 +138,85 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [shortcuts, setShortcuts] = useState<Shortcut[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [onlineUsers, setOnlineUsers] = useState<{ id: string; username: string; role: string }[]>([]);
 
-  const handleSetRealUser = (user: User) => {
-    setRealUserState(user);
-    localStorage.setItem("admin_real_user", JSON.stringify(user));
-  };
+  // Sync NextAuth session with realUser and currentUser
+  useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      const authUser: User = {
+        id: session.user.id,
+        username: session.user.username || session.user.name || "User",
+        role: (session.user.role as Role) || "Custodian",
+      };
+      setRealUserState(authUser);
+
+      // Restore simulated profile for Boss if present
+      if (authUser.role === "Boss") {
+        const savedSim = localStorage.getItem("admin_simulated_user");
+        if (savedSim) {
+          try {
+            const parsed = JSON.parse(savedSim);
+            setCurrentUser(parsed);
+          } catch {
+            setCurrentUser(authUser);
+          }
+        } else {
+          setCurrentUser(authUser);
+        }
+      } else {
+        setCurrentUser(authUser);
+      }
+
+      // Log "came online" only once per browser session, not on every page navigation
+      if (!hasLoggedOnline.current) {
+        hasLoggedOnline.current = true;
+        // Set isOnline flag in DB and add log
+        dbSetUserOnline(authUser.id, true).catch(console.error);
+        fetchOnlineUsers().then(setOnlineUsers).catch(console.error);
+        // Use a small delay so the addLog fn has the correct user context
+        setTimeout(() => {
+          addLogDirect(`${authUser.username} came online.`, authUser.id, authUser.username);
+        }, 500);
+      }
+    } else if (status === "unauthenticated") {
+      hasLoggedOnline.current = false;
+      setOnlineUsers([]);
+      setRealUserState(null);
+      setCurrentUser({
+        id: "guest",
+        username: "Guest",
+        role: "Custodian",
+      });
+    }
+  }, [session, status]);
+
+  // beforeunload: mark user offline when tab is closed
+  useEffect(() => {
+    if (!realUser) return;
+    const handleUnload = () => {
+      // Use sendBeacon so the request fires even as the page unloads
+      const payload = JSON.stringify({ userId: realUser.id });
+      navigator.sendBeacon("/api/presence/offline", new Blob([payload], { type: "application/json" }));
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, [realUser]);
+
+  // Poll for online users every 5 seconds (skips when tab is hidden)
+  useEffect(() => {
+    if (!realUser) return;
+    const poll = () => {
+      if (document.visibilityState === "visible") {
+        fetchOnlineUsers().then(setOnlineUsers).catch(console.error);
+      }
+    };
+    const interval = setInterval(poll, 5_000);
+    document.addEventListener("visibilitychange", poll);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", poll);
+    };
+  }, [realUser]);
 
   // Load from database on client mount
   useEffect(() => {
@@ -148,49 +230,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setLogs(data.logs as LogEntry[]);
         setShortcuts((data.shortcuts || []) as Shortcut[]);
         setNotifications((data.notifications || []) as Notification[]);
-
-        // Determine the real user
-        let initialRealUser: User | null = null;
-        const localRealUser = localStorage.getItem("admin_real_user");
-        if (localRealUser) {
-          const parsed = JSON.parse(localRealUser);
-          const exists = data.users.find((u) => u.id === parsed.id);
-          if (exists) {
-            initialRealUser = exists as User;
-          }
-        }
-        
-        if (initialRealUser) {
-          setRealUserState(initialRealUser);
-          localStorage.setItem("admin_real_user", JSON.stringify(initialRealUser));
-
-          // Determine the current simulated user
-          const localCurrentUser = localStorage.getItem("admin_current_user");
-          let initialCurrentUser = initialRealUser;
-          if (localCurrentUser) {
-            const parsed = JSON.parse(localCurrentUser);
-            const exists = data.users.find((u) => u.id === parsed.id);
-            if (exists) {
-              initialCurrentUser = exists as User;
-            }
-          }
-          setCurrentUser(initialCurrentUser);
-          localStorage.setItem("admin_current_user", JSON.stringify(initialCurrentUser));
-
-          // Log that the session became active
-          addLog(
-            `Session became active for user ${initialCurrentUser.username}`,
-            initialCurrentUser.id,
-            initialCurrentUser.username
-          );
-        } else {
-          setRealUserState(null);
-          setCurrentUser({
-            id: "guest",
-            username: "Guest",
-            role: "Custodian",
-          });
-        }
       } catch (err) {
         console.error("Failed to load initial DB data:", err);
       } finally {
@@ -199,6 +238,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     loadData();
   }, []);
+
+  // Direct log helper (can be called without currentUser being set yet)
+  const addLogDirect = async (action: string, uid: string, username: string) => {
+    try {
+      const newLogId = await dbAddLog(action, uid, username);
+      const newLog: LogEntry = { id: newLogId, action, username, timestamp: new Date().toISOString() };
+      setLogs((prev) => [newLog, ...prev]);
+    } catch (err) {
+      console.error("Failed to add log:", err);
+    }
+  };
 
   const addLog = async (action: string, overrideUserId?: string, overrideUsername?: string) => {
     try {
@@ -219,21 +269,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const handleSetCurrentUser = (user: User) => {
     setCurrentUser(user);
-    localStorage.setItem("admin_current_user", JSON.stringify(user));
-    // Explicit log with correct user overrides
-    addLog(`Switched active profile to ${user.username} (${user.role})`, user.id, user.username);
+    if (realUser?.role === "Boss") {
+      localStorage.setItem("admin_simulated_user", JSON.stringify(user));
+    }
+    // Always log as the real authenticated user, not the simulated profile
+    const actor = realUser ?? currentUser;
+    addLog(`Switched view to @${user.username} (${user.role}).`, actor.id, actor.username);
   };
 
   const logoutUser = () => {
-    addLog(`Logged out active profile: ${currentUser.username}`, currentUser.id, currentUser.username);
-    setRealUserState(null);
-    setCurrentUser({
-      id: "guest",
-      username: "Guest",
-      role: "Custodian",
-    });
-    localStorage.removeItem("admin_real_user");
+    const u = currentUser;
+    if (realUser) dbSetUserOnline(realUser.id, false).catch(console.error);
+    addLog(`${u.username} signed out.`, u.id, u.username);
+    localStorage.removeItem("admin_simulated_user");
     localStorage.removeItem("admin_current_user");
+    localStorage.removeItem("admin_real_user");
+    signOut({ callbackUrl: "/login" });
   };
 
   const addUser = async (username: string, role: Role, password?: string) => {
@@ -245,7 +296,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         role: role as Role,
       };
       setUsers((prev) => [...prev, newUser]);
-      await addLog(`Created user account: ${username} with role ${role}`);
+      await addLog(`Added @${username} to the team as ${role}.`);
     } catch (err) {
       console.error("Failed to add user:", err);
     }
@@ -257,7 +308,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       await dbDeleteUser(id);
       setUsers((prev) => prev.filter((u) => u.id !== id));
-      await addLog(`Deleted user account: ${targetUser.username}`);
+      await addLog(`Removed @${targetUser.username} from the team.`);
     } catch (err) {
       console.error("Failed to delete user:", err);
     }
@@ -269,7 +320,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       await dbUpdateUserRole(id, role);
       setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role: role as Role } : u)));
-      await addLog(`Changed role of user ${targetUser.username} to ${role}`);
+      await addLog(`Promoted @${targetUser.username} to ${role}.`);
     } catch (err) {
       console.error("Failed to update user role:", err);
     }
@@ -285,7 +336,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         allowedUsers,
       };
       setBoards((prev) => [...prev, newBoard]);
-      await addLog(`Created task board: "${name}"`);
+      await addLog(`Created board "${name}".`);
     } catch (err) {
       console.error("Failed to add board:", err);
     }
@@ -298,7 +349,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await dbDeleteBoard(id);
       setBoards((prev) => prev.filter((b) => b.id !== id));
       setTasks((prev) => prev.filter((t) => t.boardId !== id));
-      await addLog(`Deleted task board: "${targetBoard.name}"`);
+      await addLog(`Deleted board "${targetBoard.name}".`);
     } catch (err) {
       console.error("Failed to delete board:", err);
     }
@@ -308,7 +359,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       await dbUpdateBoard(id, name, allowedRoles, allowedUsers);
       setBoards((prev) => prev.map((b) => b.id === id ? { ...b, name, allowedRoles, allowedUsers } : b));
-      await addLog(`Updated task board: "${name}"`);
+      await addLog(`Updated board settings for "${name}".`);
     } catch (err) {
       console.error("Failed to update board:", err);
     }
@@ -334,7 +385,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       setNotifications((prev) => [...prev, newNotif]);
 
-      await addLog(`Created task: "${newTask.title}"`);
+      const assignee = users.find((u) => u.id === newTask.assignedUserId);
+      await addLog(`Assigned "${newTask.title}" to @${assignee?.username ?? newTask.assignedUserId}.`);
     } catch (err) {
       console.error("Failed to add task:", err);
     }
@@ -360,7 +412,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }));
       setNotifications((prev) => [...prev, ...newNotifs]);
 
-      await addLog(`Created ${newTasks.length} recurring tasks: "${newTasks[0]?.title}"`);
+      await addLog(`Scheduled ${newTasks.length} recurring tasks for "${newTasks[0]?.title ?? 'task'}".`);
     } catch (err) {
       console.error("Failed to add recurring tasks:", err);
     }
@@ -384,7 +436,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setNotifications((prev) => [...prev, newNotif]);
       }
 
-      await addLog(`Updated task: "${updatedTask.title}"`);
+      if (oldTask && oldTask.status !== updatedTask.status) {
+        await addLog(`Marked "${updatedTask.title}" as ${updatedTask.status}.`);
+      } else if (oldTask && oldTask.assignedUserId !== updatedTask.assignedUserId) {
+        const newAssignee = users.find((u) => u.id === updatedTask.assignedUserId);
+        await addLog(`Reassigned "${updatedTask.title}" to @${newAssignee?.username ?? updatedTask.assignedUserId}.`);
+      } else {
+        await addLog(`Edited task "${updatedTask.title}".`);
+      }
     } catch (err) {
       console.error("Failed to update task:", err);
     }
@@ -396,7 +455,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       await dbDeleteTask(id);
       setTasks((prev) => prev.filter((t) => t.id !== id));
-      await addLog(`Deleted task: "${targetTask.title}"`);
+      await addLog(`Deleted task "${targetTask.title}".`);
     } catch (err) {
       console.error("Failed to delete task:", err);
     }
@@ -422,7 +481,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         timestamp: new Date().toISOString(),
       };
       setSubmissions((prev) => [newSubmission, ...prev]);
-      await addLog(`Submitted black chips: $${amount.toLocaleString()} by ${username}`);
+      await addLog(`Logged $${amount.toLocaleString()} black chip submission for @${username}.`);
     } catch (err) {
       console.error("Failed to add submission:", err);
     }
@@ -438,7 +497,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         url,
       };
       setShortcuts((prev) => [...prev, newShortcut]);
-      await addLog(`Added shortcut: "${title}" (${url})`);
+      await addLog(`Added shortcut "${title}".${ url ? ` (${url})` : '' }`);
     } catch (err) {
       console.error("Failed to add shortcut:", err);
     }
@@ -456,19 +515,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const loginUser = (username: string, passwordInput: string): boolean => {
-    const match = users.find(
-      (u) =>
-        u.username.toLowerCase() === username.trim().toLowerCase() &&
-        (u as any).password === passwordInput
-    );
-    if (match) {
-      handleSetRealUser(match);
-      handleSetCurrentUser(match);
+  const loginUser = async (username: string, passwordInput: string): Promise<boolean> => {
+    try {
+      const res = await signIn("credentials", {
+        username: username.trim(),
+        password: passwordInput,
+        redirect: false,
+      });
+      if (res?.error) {
+        return false;
+      }
       return true;
+    } catch (err) {
+      console.error("Login failed:", err);
+      return false;
     }
-    return false;
   };
+
 
   if (loading) {
     return (
@@ -493,6 +556,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         logs,
         shortcuts,
         notifications,
+        onlineUsers,
         setCurrentUser: handleSetCurrentUser,
         addUser,
         deleteUser,

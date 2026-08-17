@@ -1,20 +1,22 @@
 "use client";
 
 import React from "react";
-import { useApp } from "@/lib/store";
-import { Button } from "@/components/ui/button";
+import { useApp, User } from "@/lib/store";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface UserDropdownProps {
   value: string;
   onValueChange: (userId: string) => void;
   placeholder?: string;
   className?: string;
+  users?: User[] | { id: string; username: string; role?: string }[];
+  disabled?: boolean;
 }
 
 export function UserDropdown({
@@ -22,36 +24,26 @@ export function UserDropdown({
   onValueChange,
   placeholder = "Select staff",
   className,
+  users: propUsers,
+  disabled,
 }: UserDropdownProps) {
-  const { users } = useApp();
-  const selectedUser = users.find((u) => u.id === value);
+  const { users: storeUsers } = useApp();
+  const userList = propUsers || storeUsers;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="outline"
-            className={`w-full justify-between font-normal text-left h-9 rounded-md bg-transparent border-input border ${className || ""}`}
-          >
-            <span>
-              {selectedUser ? `@${selectedUser.username}` : placeholder}
-            </span>
-            <span className="text-muted-foreground text-[10px]">▼</span>
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="start" className="w-56 max-h-60 overflow-y-auto">
-        {users.map((u) => (
-          <DropdownMenuItem
-            key={u.id}
-            onClick={() => onValueChange(u.id)}
-            className="cursor-pointer"
-          >
-            @{u.username}
-          </DropdownMenuItem>
+    <Select value={value} onValueChange={(val) => val && onValueChange(val)} disabled={disabled}>
+      <SelectTrigger className={`w-full ${className || ""}`}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {userList.map((u) => (
+          <SelectItem key={u.id} value={u.id}>
+            @{u.username} {u.role ? `(${u.role})` : ""}
+          </SelectItem>
         ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </SelectContent>
+    </Select>
   );
 }
+
+

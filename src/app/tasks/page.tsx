@@ -1152,17 +1152,7 @@ export default function TasksPage() {
                         }
                       >
                         <SelectTrigger className="w-full h-8 rounded-full">
-                          <SelectValue>
-                            {(value) => {
-                              const labels: Record<string, string> = {
-                                "1": "1 Month",
-                                "3": "3 Months",
-                                "6": "6 Months",
-                                "12": "1 Year",
-                              };
-                              return labels[value as string] || value;
-                            }}
-                          </SelectValue>
+                          <SelectValue placeholder="Select range" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="1">1 Month</SelectItem>
@@ -1188,16 +1178,7 @@ export default function TasksPage() {
                         }
                       >
                         <SelectTrigger className="w-full h-8 rounded-full">
-                          <SelectValue>
-                            {(value) => {
-                              const labels: Record<string, string> = {
-                                "3": "3 Months",
-                                "6": "6 Months",
-                                "12": "1 Year",
-                              };
-                              return labels[value as string] || value;
-                            }}
-                          </SelectValue>
+                          <SelectValue placeholder="Select range" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="3">3 Months</SelectItem>
@@ -2037,11 +2018,36 @@ export default function TasksPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Not Started">Not Started</SelectItem>
-                      <SelectItem value="In Progress">In Progress</SelectItem>
-                      <SelectItem value="Waiting">Waiting</SelectItem>
-                      <SelectItem value="Completed">Completed</SelectItem>
-                      <SelectItem value="Cancelled">Cancelled</SelectItem>
+                      <SelectItem value="Not Started" className="text-zinc-400 focus:text-zinc-300">
+                        <span className="flex items-center gap-2 font-medium">
+                          <span className="h-2 w-2 rounded-full bg-zinc-400" />
+                          Not Started
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="In Progress" className="text-blue-500 focus:text-blue-400">
+                        <span className="flex items-center gap-2 font-medium">
+                          <span className="h-2 w-2 rounded-full bg-blue-500" />
+                          In Progress
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="Waiting" className="text-amber-500 focus:text-amber-400">
+                        <span className="flex items-center gap-2 font-medium">
+                          <span className="h-2 w-2 rounded-full bg-amber-500" />
+                          Waiting
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="Completed" className="text-emerald-500 focus:text-emerald-400">
+                        <span className="flex items-center gap-2 font-medium">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                          Completed
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="Cancelled" className="text-rose-500 focus:text-rose-400">
+                        <span className="flex items-center gap-2 font-medium">
+                          <span className="h-2 w-2 rounded-full bg-rose-500" />
+                          Cancelled
+                        </span>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -111,3 +111,82 @@ export const chipsTrivia = pgTable("chips_trivia", {
   trivia: jsonb("trivia").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const mafiaGames = pgTable("mafia_games", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("setup"), // 'setup' | 'in_progress' | 'finished' | 'archived'
+  currentPhase: text("current_phase").notNull().default("Day"), // 'Day' | 'Night'
+  phaseNumber: integer("phase_number").notNull().default(1),
+  deadline: text("deadline"),
+  settings: jsonb("settings").notNull().default({}),
+  createdAt: text("created_at").notNull(),
+  createdBy: text("created_by").notNull().default("Boss"),
+});
+
+export const mafiaFactions = pgTable("mafia_factions", {
+  id: text("id").primaryKey(),
+  gameId: text("game_id").notNull(),
+  name: text("name").notNull(),
+  color: text("color").notNull().default("#ef4444"),
+  isEvil: boolean("is_evil").notNull().default(false),
+  winCondition: text("win_condition"),
+});
+
+export const mafiaRoles = pgTable("mafia_roles", {
+  id: text("id").primaryKey(),
+  gameId: text("game_id").notNull(),
+  factionId: text("faction_id"),
+  name: text("name").notNull(),
+  alignment: text("alignment").notNull().default("Town"),
+  priority: integer("priority").notNull().default(3), // 1: Block, 2: Protect, 3: Kill, 4: Investigate
+  abilityDescription: text("ability_description"),
+  nightActionType: text("night_action_type").notNull().default("none"), // 'none' | 'kill' | 'protect' | 'investigate' | 'block' | 'track' | 'watch' | 'custom'
+  maxUses: integer("max_uses"), // null or <= 0 = unlimited, > 0 = limited charges (e.g. 1-shot, 2-shot)
+  actionsConfig: jsonb("actions_config").$type<any[]>(), // array of multiple action objects: [{ id, name, type, maxUses }]
+});
+
+export const mafiaPlayers = pgTable("mafia_players", {
+  id: text("id").primaryKey(),
+  gameId: text("game_id").notNull(),
+  username: text("username").notNull(),
+  roleId: text("role_id"),
+  isAlive: boolean("is_alive").notNull().default(true),
+  deathPhase: text("death_phase"),
+  deathCause: text("death_cause"),
+  claimedRole: text("claimed_role"),
+  notes: text("notes"),
+});
+
+export const mafiaActions = pgTable("mafia_actions", {
+  id: text("id").primaryKey(),
+  gameId: text("game_id").notNull(),
+  phase: text("phase").notNull().default("Night"),
+  phaseNumber: integer("phase_number").notNull().default(1),
+  sourcePlayerId: text("source_player_id").notNull(),
+  actionConfigId: text("action_config_id"), // ties to specific action inside a multi-action role
+  targetPlayerId: text("target_player_id"),
+  actionType: text("action_type").notNull(),
+  result: text("result"),
+  isResolved: boolean("is_resolved").notNull().default(false),
+  notes: text("notes"),
+});
+
+export const mafiaVotes = pgTable("mafia_votes", {
+  id: text("id").primaryKey(),
+  gameId: text("game_id").notNull(),
+  phaseNumber: integer("phase_number").notNull().default(1),
+  voterPlayerId: text("voter_player_id").notNull(),
+  targetPlayerId: text("target_player_id"), // null if unvoted
+  timestamp: text("timestamp").notNull(),
+});
+
+export const mafiaPhaseLogs = pgTable("mafia_phase_logs", {
+  id: text("id").primaryKey(),
+  gameId: text("game_id").notNull(),
+  phase: text("phase").notNull(),
+  phaseNumber: integer("phase_number").notNull(),
+  summary: text("summary").notNull(),
+  createdAt: text("created_at").notNull(),
+});
