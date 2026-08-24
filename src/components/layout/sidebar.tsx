@@ -19,6 +19,8 @@ import {
   ImageUp,
   HelpCircle,
   Swords,
+  Box,
+  CalendarDays,
 } from "lucide-react";
 
 import { useApp } from "@/lib/store";
@@ -26,7 +28,9 @@ import { useApp } from "@/lib/store";
 const navItems = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
-  { name: "Black Chips", href: "/black-chips", icon: HandCoins },
+  { name: "Schedule", href: "/schedule", icon: CalendarDays },
+  // { name: "Black Chips", href: "/black-chips", icon: HandCoins },
+  { name: "Black Archive", href: "/black-archive", icon: HandCoins },
   { name: "Chips Trivia", href: "/chips-trivia", icon: HelpCircle },
   { name: "Image Host", href: "/img-host", icon: ImageUp },
   { name: "Gallery", href: "/gallery", icon: ImageIcon },
@@ -34,7 +38,7 @@ const navItems = [
   { name: "Mafia Games", href: "/mafia", icon: Swords },
   // { name: "PSD Editor", href: "/psd-editor", icon: Wand2 },
   // { name: "Logs", href: "/logs", icon: ScrollText },
-  { name: "Settings", href: "/settings", icon: Settings },
+  // { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 interface SidebarProps {
@@ -95,6 +99,20 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             </Link>
           );
         })}
+        {(currentUser.role === "Boss" || currentUser.role === "Bagman") && (
+          <Link
+            href="/inventory"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+              pathname === "/inventory"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <Box className={cn("h-4 w-4", pathname === "/inventory" ? "text-primary-foreground" : "text-muted-foreground")} />
+            <span>Inventory</span>
+          </Link>
+        )}
         {currentUser.role === "Boss" && (
           <>
           <Link
@@ -136,13 +154,18 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <span className="text-xs text-muted-foreground leading-none">{currentUser.role}</span>
           </div>
         </div>
-        <button
-          onClick={logoutUser}
-          className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 transition-all duration-200"
-        >
-          <LogOut className="h-4 w-4" />
-          <span>Log Out</span>
-        </button>
+        <div className="flex gap-3 text-sm font-medium transition-all duration-200 justify-between gap-3">
+          <button
+            onClick={logoutUser}
+            className="flex items-center gap-3 hover:bg-destructive/10 text-destructive p-2 rounded-lg flex-1"
+          >
+            <LogOut className="h-4 w-4 ml-2" />
+            <span>Log Out</span>
+          </button>
+          <Link href="/settings" className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 hover:text-foreground transition-all duration-200">
+            <Settings className="h-4 w-5" />
+          </Link>
+        </div>
       </div>
     </aside>
   </>

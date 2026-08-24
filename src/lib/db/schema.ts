@@ -112,6 +112,12 @@ export const chipsTrivia = pgTable("chips_trivia", {
   updatedAt: text("updated_at").notNull(),
 });
 
+export const teamSchedule = pgTable("team_schedule", {
+  id: text("id").primaryKey(),
+  data: jsonb("data").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const mafiaGames = pgTable("mafia_games", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
@@ -190,3 +196,40 @@ export const mafiaPhaseLogs = pgTable("mafia_phase_logs", {
   summary: text("summary").notNull(),
   createdAt: text("created_at").notNull(),
 });
+
+export const inventory = pgTable("inventory", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  notes: text("notes"),
+  estimatedPrice: text("estimated_price"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const inventoryFolders = pgTable("inventory_folders", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  color: text("color").notNull().default("#3b82f6"),
+  description: text("description"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const inventoryFolderItems = pgTable("inventory_folder_items", {
+  id: text("id").primaryKey(),
+  folderId: text("folder_id")
+    .notNull()
+    .references(() => inventoryFolders.id, { onDelete: "cascade" }),
+  itemId: text("item_id")
+    .notNull()
+    .references(() => inventory.id, { onDelete: "cascade" }),
+  addedAt: text("added_at").notNull(),
+});
+
+export const blackArchive = pgTable("black_archive", {
+  id: text("id").primaryKey(), // "main"
+  title: text("title").notNull().default("Booth items"),
+  data: jsonb("data").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
