@@ -2,7 +2,7 @@
 
 import { db } from "./db/client";
 import * as schema from "./db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
 export async function fetchInitialData() {
@@ -31,7 +31,6 @@ export async function dbAddUser(username: string, role: string, passwordInput: s
   await db.insert(schema.users).values({ id, username, role, password: passwordHash });
   return id;
 }
-
 
 export async function dbDeleteUser(id: string) {
   await db.delete(schema.users).where(eq(schema.users.id, id));
@@ -252,4 +251,137 @@ export async function dbAddNotification(userId: string, taskId: string | null, m
 
 export async function dbMarkNotificationAsRead(id: string) {
   await db.update(schema.notifications).set({ isRead: true }).where(eq(schema.notifications.id, id));
+}
+
+export async function dbFetchTeamSchedule() {
+  try {
+    const rows = await db
+      .select()
+      .from(schema.teamSchedule)
+      .where(eq(schema.teamSchedule.id, "main"))
+      .limit(1);
+    if (rows.length > 0) {
+      return rows[0].data as any;
+    }
+  } catch (err) {
+    console.error("Error fetching team schedule from DB:", err);
+  }
+  return null;
+}
+
+export async function dbSaveTeamSchedule(data: any) {
+  try {
+    const existing = await db
+      .select({ id: schema.teamSchedule.id })
+      .from(schema.teamSchedule)
+      .where(eq(schema.teamSchedule.id, "main"))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(schema.teamSchedule)
+        .set({
+          data,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(schema.teamSchedule.id, "main"));
+    } else {
+      await db.insert(schema.teamSchedule).values({
+        id: "main",
+        data,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    return { success: true };
+  } catch (err) {
+    console.error("Error saving team schedule to DB:", err);
+    return { success: false, error: String(err) };
+  }
+}
+
+export async function dbFetchPublicSchedule() {
+  try {
+    const [scheduleData, users] = await Promise.all([
+      dbFetchTeamSchedule(),
+      db
+        .select({
+          id: schema.users.id,
+          username: schema.users.username,
+          role: schema.users.role,
+        })
+        .from(schema.users),
+    ]);
+    return {
+      schedule: scheduleData,
+      users,
+    };
+  } catch (err) {
+    console.error("Error fetching public schedule data:", err);
+    return { schedule: null, users: [] };
+  }
+}
+
+async function ensureBlackArchiveTable() {
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "black_archive" (
+        "id" text PRIMARY KEY,
+        "title" text NOT NULL DEFAULT 'Booth items',
+        "data" jsonb NOT NULL,
+        "updated_at" text NOT NULL
+      );
+    `);
+  } catch (err) {
+    console.warn("Could not auto-create black_archive table:", err);
+  }
+}
+
+export async function dbFetchBlackArchive() {
+  try {
+    await ensureBlackArchiveTable();
+    const rows = await db
+      .select()
+      .from(schema.blackArchive)
+      .where(eq(schema.blackArchive.id, "main"))
+      .limit(1);
+    if (rows.length > 0) {
+      return rows[0].data as any;
+    }
+  } catch (err) {
+    console.error("Error fetching black archive from DB:", err);
+  }
+  return null;
+}
+
+export async function dbSaveBlackArchive(data: any) {
+  try {
+    await ensureBlackArchiveTable();
+    const existing = await db
+      .select({ id: schema.blackArchive.id })
+      .from(schema.blackArchive)
+      .where(eq(schema.blackArchive.id, "main"))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(schema.blackArchive)
+        .set({
+          title: data.title || "Booth items",
+          data,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(schema.blackArchive.id, "main"));
+    } else {
+      await db.insert(schema.blackArchive).values({
+        id: "main",
+        title: data.title || "Booth items",
+        data,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    return { success: true };
+  } catch (err) {
+    console.error("Error saving black archive to DB:", err);
+    return { success: false, error: String(err) };
+  }
 }

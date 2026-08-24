@@ -13,19 +13,26 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const { realUser } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isLoginPage = pathname === "/login";
+  const isPublicSchedule = pathname.startsWith("/schedule/embed") || pathname.startsWith("/schedule/view");
 
   useEffect(() => {
+    if (isPublicSchedule) return;
     if (!realUser && !isLoginPage) {
       router.replace("/login");
     } else if (realUser && isLoginPage) {
       router.replace("/");
     }
-  }, [realUser, isLoginPage, router]);
+  }, [realUser, isLoginPage, isPublicSchedule, router]);
 
   // Close sidebar automatically on navigation (pathname changes)
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
+
+  // Public embed/direct view routes render cleanly without sidebar/top-nav
+  if (isPublicSchedule) {
+    return <div className="min-h-screen w-full bg-background">{children}</div>;
+  }
 
   // While redirecting unauthenticated users
   if (!realUser && !isLoginPage) {

@@ -10,9 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Clock, CheckCircle2, AlertCircle, Play, Pause, RotateCcw, 
-  Plus, Trash2, Edit, Bookmark, Sparkles, ExternalLink, 
+import {
+  Clock, CheckCircle2, AlertCircle, Play, Pause, RotateCcw,
+  Plus, Trash2, Edit, Bookmark, Sparkles, ExternalLink,
   Globe, FileText, CheckSquare, Eye, RefreshCw, Repeat, ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
@@ -27,20 +27,20 @@ const playChime = () => {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    
+
     osc.type = "sine";
     // Play a friendly arpeggio (C5 -> E5 -> G5)
     const now = ctx.currentTime;
     osc.frequency.setValueAtTime(523.25, now); // C5
     osc.frequency.setValueAtTime(659.25, now + 0.12); // E5
     osc.frequency.setValueAtTime(783.99, now + 0.24); // G5
-    
+
     gain.gain.setValueAtTime(0.2, now);
     gain.gain.exponentialRampToValueAtTime(0.005, now + 0.6);
-    
+
     osc.connect(gain);
     gain.connect(ctx.destination);
-    
+
     osc.start();
     osc.stop(now + 0.6);
   } catch (e) {
@@ -54,7 +54,7 @@ export default function Dashboard() {
   // Active viewed user (Only Bosses can switch)
   const isBoss = currentUser.role === "Boss";
   const [selectedViewingUserName, setSelectedViewingUserName] = useState<string>(currentUser.username);
-  
+
   // Resolve viewed user context
   const viewedUser = users.find((u) => u.username === selectedViewingUserName) || currentUser;
 
@@ -63,30 +63,34 @@ export default function Dashboard() {
     setSelectedViewingUserName(currentUser.username);
   }, [currentUser]);
 
-  // Tasks assigned to viewed user (filtered by visibility rule)
-  const userTasks = tasks.filter((t) => t.assignedUserId === viewedUser.id && isTaskVisible(t.dueDate));
-  
-  // Sort: tasks with due dates first (closest first), followed by no due date
-  const sortedTasks = [...userTasks].sort((a, b) => {
-    if (!a.dueDate) return 1;
-    if (!b.dueDate) return -1;
-    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-  });
+  // Tasks assigned to viewed user
+  const allUserTasks = tasks.filter((t) => t.assignedUserId === viewedUser.id);
 
-  // Active period tasks (Current month's tasks + next month's early tasks if today is >= 23rd)
-  const activePeriodTasks = userTasks.filter((t) => {
-    if (!t.dueDate) return false;
+  // Active period tasks (Current month's tasks + next month's early tasks if today is >= 23rd + uncompleted overdue tasks)
+  const activePeriodTasks = allUserTasks.filter((t) => {
+    if (!t.dueDate) return true; // Tasks with no due date are always considered active
     const parts = t.dueDate.split("-").map(Number);
     if (parts.length !== 3) return false;
     const [ty, tm, td] = parts;
     const today = new Date();
     const todayYear = today.getFullYear();
-    const todayMonth = today.getMonth();
+    const todayMonth = today.getMonth(); // 0-indexed
     const todayDay = today.getDate();
 
+    const taskDate = new Date(ty, tm - 1, td);
+    const currentMonthStart = new Date(todayYear, todayMonth, 1);
+
+    // Current month tasks
     if (ty === todayYear && (tm - 1) === todayMonth) {
       return true;
     }
+
+    // Overdue tasks that are still incomplete (need attention)
+    if (taskDate < currentMonthStart) {
+      return t.status !== "Completed" && t.status !== "Cancelled";
+    }
+
+    // Next month's early tasks (1st-10th) if today is >= 23rd
     if (todayDay >= 23) {
       let nextMonth = todayMonth + 1;
       let nextMonthYear = todayYear;
@@ -99,6 +103,17 @@ export default function Dashboard() {
       }
     }
     return false;
+  });
+
+  const [taskViewFilter, setTaskViewFilter] = useState<"active" | "all">("active");
+
+  const displayTasks = taskViewFilter === "active" ? activePeriodTasks : allUserTasks;
+
+  // Sort: tasks with due dates first (closest first), followed by no due date
+  const sortedTasks = [...displayTasks].sort((a, b) => {
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
 
   const activeTasks = activePeriodTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
@@ -123,7 +138,7 @@ export default function Dashboard() {
   const [editNoDeadline, setEditNoDeadline] = useState(false);
 
   const handleToggleEditAssigneeUser = (userId: string) => {
-    setEditAssignees((prev) => 
+    setEditAssignees((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
   };
@@ -211,7 +226,7 @@ export default function Dashboard() {
 
   // --- TOOL 1: PERSONAL NOTEPAD STATE ---
   const [notepadText, setNotepadText] = useState("");
-  
+
   // Load notepad text from localStorage based on viewedUser
   useEffect(() => {
     const saved = localStorage.getItem(`notepad_${viewedUser.id}`);
@@ -256,8 +271,8 @@ export default function Dashboard() {
             if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
             playChime();
             toast.success(
-              timerMode === "work" 
-                ? "Focus session complete! Time for a break." 
+              timerMode === "work"
+                ? "Focus session complete! Time for a break."
                 : "Break finished! Ready to focus?"
             );
             return 0;
@@ -291,7 +306,7 @@ export default function Dashboard() {
   const handleAddShortcut = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newShortcutTitle.trim() || !newShortcutUrl.trim()) return;
-    
+
     // Add protocol if missing
     let formattedUrl = newShortcutUrl.trim();
     if (formattedUrl.startsWith('/')) {
@@ -326,7 +341,7 @@ export default function Dashboard() {
     } else if (tzOffset.includes("GMT-")) {
       offsetHours = -parseFloat(tzOffset.split("GMT-")[1]);
     }
-    
+
     const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
     const tzDate = new Date(utc + (3600000 * offsetHours));
     return tzDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -336,8 +351,8 @@ export default function Dashboard() {
   const [draftTitle, setDraftTitle] = useState("");
   const [draftBoardName, setDraftBoardName] = useState("");
   // Get accessible boards
-  const accessibleBoards = boards.filter((b) => 
-    currentUser.role === "Boss" || 
+  const accessibleBoards = boards.filter((b) =>
+    currentUser.role === "Boss" ||
     b.allowedRoles.includes(currentUser.role) ||
     (b.allowedUsers && b.allowedUsers.includes(currentUser.id))
   );
@@ -382,7 +397,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
-      
+
       {/* Header Panel */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-card/40 border border-border/40 p-6 rounded-2xl backdrop-blur-md">
         <div>
@@ -390,8 +405,7 @@ export default function Dashboard() {
             Dashboard
           </h1>
           <p className="text-muted-foreground mt-1 flex items-center gap-1.5 text-sm">
-            <Sparkles className="h-4 w-4 text-purple-500" />
-            Welcome back, {currentUser.username}. It's time to do some shady business.
+            Welcome back, {currentUser.username}. This is the dashboard. Here, you can see your tasks metrics and a a quick glance over the queue of your pending tasks.
           </p>
         </div>
 
@@ -400,8 +414,8 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 bg-background/50 border border-border/40 px-3 py-1.5 rounded-full flex-shrink-0 shadow-xs">
             <Eye className="h-4 w-4 text-muted-foreground" />
             <span className="text-xs font-semibold text-muted-foreground">Viewing Workspace:</span>
-            <Select 
-              value={selectedViewingUserName} 
+            <Select
+              value={selectedViewingUserName}
               onValueChange={(val) => val && setSelectedViewingUserName(val)}
             >
               <SelectTrigger className="w-[180px]">
@@ -420,73 +434,67 @@ export default function Dashboard() {
       </div>
 
       {/* Metrics Row */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Card className="border-border/30 bg-card/30 backdrop-blur-xs lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Workload</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3 pt-1">
-            <div className="bg-background/25 border border-border/15 p-2.5 rounded-xl flex flex-col justify-between">
-              <div>
-                <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider">Total Assigned</span>
-                <div className="text-2xl font-extrabold mt-0.5">{userTasks.length}</div>
-              </div>
-              <p className="text-[9px] text-muted-foreground mt-1">Visible tasks</p>
-            </div>
-            
-            <div className="bg-background/25 border border-border/15 p-2.5 rounded-xl flex flex-col justify-between">
-              <div>
-                <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider">Current Month</span>
-                <div className="text-2xl font-extrabold mt-0.5 text-primary">{currentMonthWorkloadCount}</div>
-              </div>
-              <p className="text-[9px] text-muted-foreground mt-1">Due this period</p>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-border/30 bg-card/30 backdrop-blur-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Completed Tasks</CardTitle>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+        {/* Current Workload */}
+        <div className="border border-border/30 bg-card/30 backdrop-blur-xs rounded-xl p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current Workload</span>
+            <Clock className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <div className="text-3xl font-extrabold text-primary">{activePeriodTasks.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">Due this period</p>
+          </div>
+        </div>
+
+        {/* Completed Tasks */}
+        <div className="border border-border/30 bg-card/30 backdrop-blur-xs rounded-xl p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Completed Tasks</span>
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div>
             <div className="text-3xl font-extrabold text-emerald-500">{completedTasksCount}</div>
             <p className="text-xs text-muted-foreground mt-1">Successfully completed</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="border-border/30 bg-card/30 backdrop-blur-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pending Tasks</CardTitle>
+        {/* Pending Tasks */}
+        <div className="border border-border/30 bg-card/30 backdrop-blur-xs rounded-xl p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pending Tasks</span>
             <AlertCircle className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div>
             <div className="text-3xl font-extrabold text-amber-500">{pendingTasksCount}</div>
             <p className="text-xs text-muted-foreground mt-1">Needs to be done</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="border-border/30 bg-card/30 backdrop-blur-xs">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tasks Progress</CardTitle>
+        {/* Tasks Progress */}
+        <div className="border border-border/30 bg-card/30 backdrop-blur-xs rounded-xl p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tasks Progress</span>
             <Sparkles className="h-4 w-4 text-purple-500" />
-          </CardHeader>
-          <CardContent className="space-y-3">
+          </div>
+          <div className="space-y-2">
             <div className="text-3xl font-extrabold text-primary">{completionRate}%</div>
             <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-primary transition-all duration-500" 
-                style={{ width: `${completionRate}%` }} 
+              <div
+                className="h-full bg-primary transition-all duration-500"
+                style={{ width: `${completionRate}%` }}
               />
             </div>
-          </CardContent>
-        </Card>
+            <p className="text-xs text-muted-foreground">Completion rate</p>
+          </div>
+        </div>
+
       </div>
 
       {/* Main Grid: Left = Task Table, Right = 5 Tools */}
       <div className="grid gap-6 lg:grid-cols-3">
-        
+
         {/* Left Column: Tasks Queue Table (2 columns wide) */}
         <div className="lg:col-span-2 space-y-6 min-w-0 overflow-hidden">
           <Card className="border-border/40 bg-card/60 backdrop-blur-md shadow-md h-full flex flex-col w-full overflow-hidden">
@@ -497,9 +505,32 @@ export default function Dashboard() {
                   Deadline prioritized task log assigned to @{viewedUser.username}.
                 </CardDescription>
               </div>
-              <Badge variant="outline" className="rounded-full">
-                {userTasks.length} Tasks
-              </Badge>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center bg-muted/40 p-0.5 rounded-lg border border-border/40 text-[11px] font-medium">
+                  <button
+                    onClick={() => setTaskViewFilter("active")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md transition-all",
+                      taskViewFilter === "active"
+                        ? "bg-primary text-primary-foreground font-bold shadow-2xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Current ({activePeriodTasks.length})
+                  </button>
+                  <button
+                    onClick={() => setTaskViewFilter("all")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md transition-all",
+                      taskViewFilter === "all"
+                        ? "bg-primary text-primary-foreground font-bold shadow-2xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    All ({allUserTasks.length})
+                  </button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-0 flex-1 overflow-x-auto">
               {sortedTasks.length === 0 ? (
@@ -556,8 +587,8 @@ export default function Dashboard() {
                             )}
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap">
-                            <Select 
-                              value={task.status} 
+                            <Select
+                              value={task.status}
                               onValueChange={(val) => val && handleStatusChange(task, val as any)}
                             >
                               <SelectTrigger className={cn("w-[130px] font-semibold text-xs rounded-full border shadow-none", getStatusColor(task.status))}>
@@ -598,9 +629,9 @@ export default function Dashboard() {
                             </Select>
                           </td>
                           <td className="px-4 py-4 text-right whitespace-nowrap">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="h-7 w-7 rounded-full hover:bg-muted"
                               onClick={() => handleOpenEditTask(task)}
                             >
@@ -623,7 +654,7 @@ export default function Dashboard() {
             <Sparkles className="h-4 w-4 text-purple-500" />
             Productivity Tools
           </h2>
-          
+
           {/* TOOL 1: SECRET NOTEPAD */}
           <Card className="border-border/40 bg-card/60 backdrop-blur-md shadow-xs relative overflow-hidden group">
             <CardHeader className="pb-3 flex flex-row items-center justify-between border-b border-border/40">
@@ -638,7 +669,7 @@ export default function Dashboard() {
               )}
             </CardHeader>
             <CardContent className="pt-3">
-              <Textarea 
+              <Textarea
                 value={notepadText}
                 onChange={(e) => handleSaveNotepad(e.target.value)}
                 placeholder="Write notes that are only visible to you... (Saves automatically)"
@@ -656,19 +687,19 @@ export default function Dashboard() {
                   <CardTitle className="text-sm">Pomodoro Focus Timer</CardTitle>
                 </div>
                 <div className="flex bg-muted/60 p-0.5 rounded-full gap-0.5 text-[9px] font-semibold">
-                  <button 
+                  <button
                     onClick={() => setTimerMode("work")}
                     className={cn("px-2 py-0.5 rounded-full transition-all", timerMode === "work" ? "bg-background shadow-xs text-foreground" : "text-muted-foreground")}
                   >
                     Work
                   </button>
-                  <button 
+                  <button
                     onClick={() => setTimerMode("short")}
                     className={cn("px-2 py-0.5 rounded-full transition-all", timerMode === "short" ? "bg-background shadow-xs text-foreground" : "text-muted-foreground")}
                   >
                     Short
                   </button>
-                  <button 
+                  <button
                     onClick={() => setTimerMode("long")}
                     className={cn("px-2 py-0.5 rounded-full transition-all", timerMode === "long" ? "bg-background shadow-xs text-foreground" : "text-muted-foreground")}
                   >
@@ -681,18 +712,18 @@ export default function Dashboard() {
               <div className="relative flex items-center justify-center w-24 h-24">
                 {/* SVG Progress Ring */}
                 <svg className="absolute w-full h-full -rotate-90">
-                  <circle 
-                    cx="48" 
-                    cy="48" 
-                    r="42" 
-                    className="stroke-muted fill-transparent" 
+                  <circle
+                    cx="48"
+                    cy="48"
+                    r="42"
+                    className="stroke-muted fill-transparent"
                     strokeWidth="3.5"
                   />
-                  <circle 
-                    cx="48" 
-                    cy="48" 
-                    r="42" 
-                    className="stroke-red-500 fill-transparent transition-all duration-1000" 
+                  <circle
+                    cx="48"
+                    cy="48"
+                    r="42"
+                    className="stroke-red-500 fill-transparent transition-all duration-1000"
                     strokeWidth="3.5"
                     strokeDasharray={2 * Math.PI * 42}
                     strokeDashoffset={2 * Math.PI * 42 * (1 - progressPercent / 100)}
@@ -702,10 +733,10 @@ export default function Dashboard() {
                   {formatTime(timeLeft)}
                 </div>
               </div>
-              
+
               <div className="flex gap-2">
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   variant={isTimerRunning ? "outline" : "default"}
                   onClick={toggleTimer}
                   className="rounded-full h-8 px-4 gap-1.5 text-xs"
@@ -720,9 +751,9 @@ export default function Dashboard() {
                     </>
                   )}
                 </Button>
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
+                <Button
+                  size="sm"
+                  variant="ghost"
                   onClick={resetTimer}
                   className="rounded-full h-8 w-8 p-0"
                 >
@@ -744,15 +775,15 @@ export default function Dashboard() {
               {/* Add form */}
               <form onSubmit={handleAddShortcut} className="flex gap-1.5">
                 <div className="grid grid-cols-2 gap-1 flex-1">
-                  <Input 
-                    placeholder="Title" 
+                  <Input
+                    placeholder="Title"
                     value={newShortcutTitle}
                     onChange={(e) => setNewShortcutTitle(e.target.value)}
                     className="h-7 text-xs bg-background/50"
                     required
                   />
-                  <Input 
-                    placeholder="/url" 
+                  <Input
+                    placeholder="/url"
                     value={newShortcutUrl}
                     onChange={(e) => setNewShortcutUrl(e.target.value)}
                     className="h-7 text-xs bg-background/50"
@@ -782,15 +813,15 @@ export default function Dashboard() {
                       <Bookmark className="h-3 w-3 text-emerald-500" /> {s.title}
                     </span>
                     <div className="flex items-center gap-2">
-                      <a 
-                        href={s.url} 
-                        target="_blank" 
+                      <a
+                        href={s.url}
+                        target="_blank"
                         rel="noreferrer"
                         className="text-primary hover:underline flex items-center gap-0.5 text-[10px]"
                       >
                         Visit <ExternalLink className="h-2.5 w-2.5" />
                       </a>
-                      <button 
+                      <button
                         onClick={() => deleteShortcut(s.id)}
                         className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                       >
@@ -825,27 +856,27 @@ export default function Dashboard() {
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="task-title">Title</Label>
-                <Input 
-                  id="task-title" 
-                  value={editTitle} 
-                  onChange={(e) => setEditTitle(e.target.value)} 
-                  required 
+                <Input
+                  id="task-title"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  required
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="task-desc">Description</Label>
-                <Textarea 
-                  id="task-desc" 
-                  value={editDescription} 
-                  onChange={(e) => setEditDescription(e.target.value)} 
+                <Textarea
+                  id="task-desc"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="task-assignees" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assign To</Label>
-                <MultiUserDropdown 
-                  value={editAssignees} 
-                  onValueChange={setEditAssignees} 
+                <MultiUserDropdown
+                  value={editAssignees}
+                  onValueChange={setEditAssignees}
                   placeholder="Select assignees"
                 />
               </div>
@@ -906,15 +937,15 @@ export default function Dashboard() {
                   </Select>
                 </div>
               </div>
-              
+
               {/* Due Date & Calendar Picker */}
               <div className="space-y-2 border-t border-border/40 pt-3">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="task-dueDate" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Due Date</Label>
                   <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                    <Checkbox 
+                    <Checkbox
                       id="task-no-deadline"
-                      checked={editNoDeadline} 
+                      checked={editNoDeadline}
                       onCheckedChange={(checked) => {
                         setEditNoDeadline(!!checked);
                         if (checked) setEditDueDate("");
@@ -923,20 +954,20 @@ export default function Dashboard() {
                     <span>No deadline</span>
                   </label>
                 </div>
-                
+
                 <div className="flex gap-2">
-                  <Input 
-                    id="task-dueDate" 
-                    type="date" 
-                    value={editNoDeadline ? "" : editDueDate} 
+                  <Input
+                    id="task-dueDate"
+                    type="date"
+                    value={editNoDeadline ? "" : editDueDate}
                     disabled={editNoDeadline}
-                    onChange={(e) => setEditDueDate(e.target.value)} 
+                    onChange={(e) => setEditDueDate(e.target.value)}
                     placeholder="YYYY-MM-DD"
                     className="flex-1 bg-background/50 border-border/40"
                   />
-                  <CalendarPicker 
-                    value={editDueDate} 
-                    onChange={setEditDueDate} 
+                  <CalendarPicker
+                    value={editDueDate}
+                    onChange={setEditDueDate}
                     disabled={editNoDeadline}
                   />
                 </div>

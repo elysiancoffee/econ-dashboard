@@ -1,6 +1,8 @@
 import type { NextAuthConfig } from "next-auth";
 
 export const authConfig: NextAuthConfig = {
+  trustHost: true,
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
   pages: {
     signIn: "/login",
   },
@@ -9,12 +11,15 @@ export const authConfig: NextAuthConfig = {
       const isLoggedIn = !!auth?.user;
       const isAuthPage = nextUrl.pathname.startsWith("/login");
       const isApiAuthRoute = nextUrl.pathname.startsWith("/api/auth");
+      const isPublicSchedule =
+        nextUrl.pathname.startsWith("/schedule/embed") ||
+        nextUrl.pathname.startsWith("/schedule/view");
       const isPublicAsset =
         nextUrl.pathname.startsWith("/_next") ||
         nextUrl.pathname.startsWith("/api") ||
         nextUrl.pathname.includes(".");
 
-      if (isApiAuthRoute || isPublicAsset) {
+      if (isApiAuthRoute || isPublicAsset || isPublicSchedule) {
         return true;
       }
 
