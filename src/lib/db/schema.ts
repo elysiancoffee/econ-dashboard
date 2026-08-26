@@ -8,6 +8,8 @@ export const users = pgTable("users", {
     .notNull()
     .references(() => roles.name, { onDelete: "cascade" }),
   isOnline: boolean("isOnline").notNull().default(false), // true | false
+  lastSeen: text("last_seen"),
+  sessionVersion: integer("session_version").notNull().default(1),
 });
 
 export const boards = pgTable("boards", {

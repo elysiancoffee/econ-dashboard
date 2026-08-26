@@ -11,11 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Key, UserPlus, ShieldAlert, Sparkles, UserRoundPen } from "lucide-react";
+import { Plus, Trash2, Key, UserPlus, ShieldAlert, Sparkles, UserRoundPen, WifiOff, RefreshCw, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
-  const { currentUser, users, addUser, deleteUser, updateUserRole } = useApp();
+  const { currentUser, users, addUser, deleteUser, updateUserRole, onlineUsers, forceUserOffline, forceLogoutUser, resetAllOnlinePresence } = useApp();
   const { theme, setTheme } = useTheme();
   
   // Default Tasks View setting
@@ -144,138 +144,210 @@ export default function SettingsPage() {
                   </CardDescription>
                 </div>
 
-                {currentUser.role === "Boss" && (
-                  <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                    <DialogTrigger render={<Button className="gap-2 rounded-full" />}>
-                      <UserPlus className="h-4 w-4" />
-                      Create Staff Account
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                      <form onSubmit={handleCreateUser}>
-                        <DialogHeader>
-                          <DialogTitle>Create Staff Profile</DialogTitle>
-                          <DialogDescription>
-                            Set credentials and choose a hierarchy role. Users will log in with these credentials.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="username">Username</Label>
-                            <div className="relative">
-                              <UserRoundPen className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                              <Input 
-                                id="username" 
-                                value={newUsername} 
-                                onChange={(e) => setNewUsername(e.target.value)} 
-                                placeholder="e.g. paulie_g" 
-                                required 
-                                autoComplete="off"
-                                className="ps-10"
-                              />
+                  {currentUser.role === "Boss" && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={async () => {
+                          await resetAllOnlinePresence();
+                          toast.success("Reset all active online presence states.");
+                        }}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Reset Presence</span>
+                      </Button>
+                      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                        <DialogTrigger render={
+                          <Button className="gap-2">
+                            <Plus className="h-4 w-4" />
+                            Add Staff
+                          </Button>
+                        } />
+                        <DialogContent>
+                          <form onSubmit={handleCreateUser}>
+                            <DialogHeader>
+                              <DialogTitle>Add Team Member</DialogTitle>
+                              <DialogDescription>
+                                Create a credential set for a new member of the hierarchy.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="username">Username</Label>
+                                <Input 
+                                  id="username" 
+                                  value={newUsername} 
+                                  onChange={(e) => setNewUsername(e.target.value)} 
+                                  placeholder="e.g. VitoCorleone" 
+                                  required 
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="password">Temporary Password</Label>
+                                <div className="relative">
+                                  <Key className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                  <Input 
+                                    id="password" 
+                                    type="password"
+                                    value={newUserPassword} 
+                                    onChange={(e) => setNewUserPassword(e.target.value)} 
+                                    placeholder="Enter password" 
+                                    required 
+                                    readOnly={isReadOnly}
+                                    onFocus={() => setIsReadOnly(false)}
+                                    onBlur={() => setIsReadOnly(true)}
+                                    className="ps-10"
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="role">Hierarchy Role</Label>
+                                <Select 
+                                  value={newUserRole} 
+                                  onValueChange={(val) => setNewUserRole(val as Role)}
+                                >
+                                  <SelectTrigger id="role">
+                                    <SelectValue placeholder="Select hierarchy role" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Boss" className="ps-3 py-2">Boss</SelectItem>
+                                    <SelectItem value="Consigliere" className="ps-3 py-2">Consigliere</SelectItem>
+                                    <SelectItem value="Bagman" className="ps-3 py-2">Bagman</SelectItem>
+                                    <SelectItem value="Associate" className="ps-3 py-2">Associate</SelectItem>
+                                    <SelectItem value="Custodian" className="ps-3 py-2">Custodian</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="password">Security Password</Label>
-                            <div className="relative">
-                              <Key className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                              <Input 
-                                id="password" 
-                                type="password"
-                                value={newUserPassword} 
-                                onChange={(e) => setNewUserPassword(e.target.value)} 
-                                placeholder="Enter password" 
-                                required 
-                                readOnly={isReadOnly}
-                                onFocus={() => setIsReadOnly(false)}
-                                onBlur={() => setIsReadOnly(true)}
-                                className="ps-10"
-                              />
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="role">Hierarchy Role</Label>
-                            <Select 
-                              value={newUserRole} 
-                              onValueChange={(val) => setNewUserRole(val as Role)}
-                            >
-                              <SelectTrigger id="role">
-                                <SelectValue placeholder="Select hierarchy role" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Boss" className="ps-3 py-2">Boss</SelectItem>
-                                <SelectItem value="Consigliere" className="ps-3 py-2">Consigliere</SelectItem>
-                                <SelectItem value="Bagman" className="ps-3 py-2">Bagman</SelectItem>
-                                <SelectItem value="Associate" className="ps-3 py-2">Associate</SelectItem>
-                                <SelectItem value="Custodian" className="ps-3 py-2">Custodian</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button type="submit">Create Account</Button>
-                        </DialogFooter>
-                      </form>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left text-muted-foreground">
-                    <thead className="bg-muted/50 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
-                      <tr>
-                        <th className="px-6 py-4">Username</th>
-                        <th className="px-6 py-4">Current Role</th>
-                        <th className="px-6 py-4">Actions / Classifications</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {users.map((u) => (
-                        <tr key={u.id} className="hover:bg-muted/10 transition-colors">
-                          <td className="px-6 py-4 font-semibold text-foreground">
-                            @{u.username}
-                          </td>
-                          <td className="px-6 py-4">
-                            <Select 
-                              value={u.role} 
-                              onValueChange={(val) => handleRoleChange(u.id, val as Role)}
-                              disabled={u.id === currentUser.id || currentUser.role !== "Boss"}
-                            >
-                              <SelectTrigger className="w-[180px] bg-transparent border-none">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Boss">Boss</SelectItem>
-                                <SelectItem value="Consigliere">Consigliere</SelectItem>
-                                <SelectItem value="Bagman">Bagman</SelectItem>
-                                <SelectItem value="Associate">Associate</SelectItem>
-                                <SelectItem value="Custodian">Custodian</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex gap-2">
-                              {u.id === currentUser.id ? (
-                                <Badge variant="secondary">Active Session</Badge>
-                              ) : (
-                                currentUser.role === "Boss" ? (
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-8 w-8 text-destructive"
-                                    onClick={() => handleDeleteUser(u.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                ) : (
-                                  <Badge variant="outline" className="text-xs">Protected</Badge>
-                                )
-                              )}
-                            </div>
-                          </td>
+                            <DialogFooter>
+                              <Button type="submit">Create Account</Button>
+                            </DialogFooter>
+                          </form>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  )}
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-muted-foreground">
+                      <thead className="bg-muted/50 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                        <tr>
+                          <th className="px-6 py-4">Username & Status</th>
+                          <th className="px-6 py-4">Current Role</th>
+                          <th className="px-6 py-4">Actions / Classifications</th>
                         </tr>
-                      ))}
-                    </tbody>
+                      </thead>
+                      <tbody className="divide-y">
+                        {users.map((u) => {
+                          const isOnline = onlineUsers.some((o) => o.id === u.id);
+                          return (
+                            <tr key={u.id} className="hover:bg-muted/10 transition-colors">
+                              <td className="px-6 py-4 font-semibold text-foreground">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${
+                                      isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-neutral-600/40"
+                                    }`}
+                                    title={isOnline ? "Online" : "Offline"}
+                                  />
+                                  <span>@{u.username}</span>
+                                  {isOnline && (
+                                    <span className="text-[10px] text-emerald-500 font-medium ml-1">Online</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <Select 
+                                  value={u.role} 
+                                  onValueChange={(val) => handleRoleChange(u.id, val as Role)}
+                                  disabled={u.id === currentUser.id || currentUser.role !== "Boss"}
+                                >
+                                  <SelectTrigger className="w-[180px] bg-transparent border-none">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Boss">Boss</SelectItem>
+                                    <SelectItem value="Consigliere">Consigliere</SelectItem>
+                                    <SelectItem value="Bagman">Bagman</SelectItem>
+                                    <SelectItem value="Associate">Associate</SelectItem>
+                                    <SelectItem value="Custodian">Custodian</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2">
+                                  {u.id === currentUser.id ? (
+                                    <Badge variant="secondary">Active Session</Badge>
+                                  ) : (
+                                    currentUser.role === "Boss" ? (
+                                      <div className="flex items-center gap-1">
+                                        {isOnline ? (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 px-2 text-xs text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 gap-1"
+                                            onClick={async () => {
+                                              await forceUserOffline(u.id);
+                                              toast.info(`Forced @${u.username} offline.`);
+                                            }}
+                                            title="Force user offline"
+                                          >
+                                            <WifiOff className="h-3.5 w-3.5" />
+                                            <span className="hidden md:inline">Force Offline</span>
+                                          </Button>
+                                        ) : (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 px-2 text-xs text-rose-500/80 hover:text-rose-400 hover:bg-rose-500/10 gap-1"
+                                            onClick={async () => {
+                                              await forceLogoutUser(u.id);
+                                              toast.success(`Forced logout for @${u.username}.`);
+                                            }}
+                                            title="Force logout and revoke session"
+                                          >
+                                            <LogOut className="h-3.5 w-3.5" />
+                                            <span className="hidden md:inline">Force Logout</span>
+                                          </Button>
+                                        )}
+                                        {isOnline && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 px-2 text-xs text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 gap-1"
+                                            onClick={async () => {
+                                              await forceLogoutUser(u.id);
+                                              toast.success(`Forced logout for @${u.username}.`);
+                                            }}
+                                            title="Force logout and revoke session"
+                                          >
+                                            <LogOut className="h-3.5 w-3.5" />
+                                            <span className="hidden md:inline">Force Logout</span>
+                                          </Button>
+                                        )}
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-destructive"
+                                          onClick={() => handleDeleteUser(u.id)}
+                                          title="Delete user account"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <Badge variant="outline" className="text-xs">Protected</Badge>
+                                    )
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
                   </table>
                 </div>
               </CardContent>

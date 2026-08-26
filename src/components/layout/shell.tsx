@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { TopNav } from "./top-nav";
 import { useApp } from "@/lib/store";
+import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { LoaderTwo } from "@/components/ui/loader";
 
@@ -11,18 +12,19 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { realUser } = useApp();
+  const { status } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isLoginPage = pathname === "/login";
   const isPublicSchedule = pathname.startsWith("/schedule/embed") || pathname.startsWith("/schedule/view");
 
   useEffect(() => {
-    if (isPublicSchedule) return;
-    if (!realUser && !isLoginPage) {
+    if (isPublicSchedule || status === "loading") return;
+    if (status === "unauthenticated" && !isLoginPage) {
       router.replace("/login");
-    } else if (realUser && isLoginPage) {
+    } else if (status === "authenticated" && isLoginPage) {
       router.replace("/");
     }
-  }, [realUser, isLoginPage, isPublicSchedule, router]);
+  }, [status, isLoginPage, isPublicSchedule, router]);
 
   // Close sidebar automatically on navigation (pathname changes)
   useEffect(() => {
@@ -34,20 +36,22 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     return <div className="min-h-screen w-full bg-background">{children}</div>;
   }
 
-  // While redirecting unauthenticated users
-  if (!realUser && !isLoginPage) {
+  // While checking session or redirecting unauthenticated users
+  if (status === "loading" || (status === "unauthenticated" && !isLoginPage)) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#09090b]">
         <div className="flex flex-col items-center gap-4">
           <LoaderTwo />
-          <p className="text-sm text-neutral-400">Redirecting to login...</p>
+          <p className="text-sm text-neutral-400">
+            {status === "loading" ? "Loading session..." : "Redirecting to login..."}
+          </p>
         </div>
       </div>
     );
   }
 
   // While redirecting authenticated users from login page
-  if (realUser && isLoginPage) {
+  if (status === "authenticated" && isLoginPage) {
     return null;
   }
 

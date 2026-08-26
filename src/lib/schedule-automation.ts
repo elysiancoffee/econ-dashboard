@@ -486,3 +486,59 @@ export function generateAutomatedTasks({
 
   return deduplicatedTasks;
 }
+
+/**
+ * Checks whether a task title belongs to a specific schedule duty.
+ */
+export function isTaskMatchingDuty(taskTitle: string, scheduleTaskName: string): boolean {
+  const normTitle = taskTitle.toLowerCase().trim();
+  const normDuty = scheduleTaskName.toLowerCase().trim();
+
+  if (normDuty.includes("watch")) return normTitle.includes("watch thread");
+  if (normDuty.includes("poll")) return normTitle.includes("item poll");
+  if (normDuty.includes("activity")) return normTitle.includes("monthly activity");
+  if (normDuty.includes("cvc")) return normTitle.includes("cvc");
+  if (normDuty.includes("pth")) return normTitle.includes("pth");
+  if (normDuty.includes("avvie") || normDuty.includes("logging") || normDuty.includes("rb")) {
+    return normTitle.includes("avvie") || normTitle.includes("logging") || normTitle.includes("rb");
+  }
+  if (normDuty.includes("mosaic")) return normTitle.includes("mosaic");
+
+  return normTitle.startsWith(normDuty) || normTitle.includes(normDuty);
+}
+
+/**
+ * Checks whether a task dueDate falls within a schedule period (including grace period for next-month wrap-up tasks).
+ */
+export function isDateInPeriod(dueDate: string, period: SchedulePeriod): boolean {
+  const parts = dueDate.split("-");
+  if (parts.length < 2) return false;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+
+  if (isNaN(year) || isNaN(month)) return false;
+
+  const startVal = period.startYear * 12 + period.startMonth;
+  const endVal = period.endYear * 12 + period.endMonth;
+  const currentVal = year * 12 + month;
+
+  // Allow up to +1 month after period ends for next-month wrapup tasks (e.g. 1st/3rd drawings)
+  return currentVal >= startVal && currentVal <= endVal + 1;
+}
+
+/**
+ * Finds all automated duty tasks for a given schedule task and period.
+ */
+export function findDutyTasksForPeriod({
+  scheduleTaskName,
+  period,
+  tasks,
+}: {
+  scheduleTaskName: string;
+  period: SchedulePeriod;
+  tasks: Task[];
+}): Task[] {
+  return tasks.filter((t) => {
+    return isTaskMatchingDuty(t.title, scheduleTaskName) && isDateInPeriod(t.dueDate, period);
+  });
+}

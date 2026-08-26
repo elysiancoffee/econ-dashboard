@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarBadge, AvatarFallback, AvatarGroup, AvatarImage } from "@/components/ui/avatar";
 import {
   Tooltip,
   TooltipContent,
@@ -29,12 +29,12 @@ interface TopNavProps {
 
 // Stable role-based avatar colors so each role always gets the same hue
 const roleColors: Record<string, string> = {
-  Boss:        "bg-rose-500/20 text-rose-400 ring-rose-500/40",
-  Underboss:   "bg-orange-500/20 text-orange-400 ring-orange-500/40",
-  Bagman:      "bg-amber-500/20 text-amber-400 ring-amber-500/40",
+  Boss: "bg-rose-500/20 text-rose-400 ring-rose-500/40",
+  Underboss: "bg-orange-500/20 text-orange-400 ring-orange-500/40",
+  Bagman: "bg-amber-500/20 text-amber-400 ring-amber-500/40",
   Consigliere: "bg-violet-500/20 text-violet-400 ring-violet-500/40",
-  Associate:   "bg-sky-500/20 text-sky-400 ring-sky-500/40",
-  Custodian:   "bg-slate-500/20 text-slate-400 ring-slate-500/40",
+  Associate: "bg-sky-500/20 text-sky-400 ring-sky-500/40",
+  Custodian: "bg-slate-500/20 text-slate-400 ring-slate-500/40",
 };
 
 function getInitials(username: string) {
@@ -66,7 +66,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
       const arrivals = onlineUsers.filter((u) => !prev.has(u.id));
       if (arrivals.length > 0) {
         // Play sound once for any new arrival
-        swooshRef.current?.play().catch(() => {});
+        swooshRef.current?.play().catch(() => { });
         // Mark them for the slide-in animation
         const ids = new Set(arrivals.map((u) => u.id));
         setAnimatingIds((prev) => new Set([...prev, ...ids]));
@@ -87,7 +87,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
   }, [onlineUsers]);
 
   // 1. Dynamic "due soon" sticky notifications for current user
-  const dueSoonTasks = tasks.filter((t) => 
+  const dueSoonTasks = tasks.filter((t) =>
     t.assignedUserId === currentUser.id &&
     t.status !== "Completed" &&
     t.status !== "Cancelled" &&
@@ -132,13 +132,13 @@ export function TopNav({ onMenuClick }: TopNavProps) {
           Dashboard <span className="mx-2 text-border">/</span> Overview
         </div>
       </div>
-      
+
       <div className="flex items-center gap-4">
 
         {/* ── Online users avatar group ── */}
         {onlineUsers.length > 0 && (
           <div className="hidden md:flex items-center">
-            <div className="flex items-center -space-x-2">
+            <AvatarGroup>
               {visibleOnline.map((u) => {
                 const colorClass = roleColors[u.role] ?? roleColors["Custodian"];
                 const isNew = animatingIds.has(u.id);
@@ -153,13 +153,12 @@ export function TopNav({ onMenuClick }: TopNavProps) {
                             : "",
                         ].join(" ")}
                       >
-                        <Avatar className={`h-8 w-8 ring-2 ring-background ${colorClass} transition-transform hover:scale-110 hover:z-10 hover:-translate-y-0.5`}>
+                        <Avatar className={`h-8 w-8 ring-1 ring-background ${colorClass} transition-transform hover:z-10 hover:-translate-y-0.1`}>
+                          <AvatarImage src={`https://i.pravatar.cc/100?u=${u.username}`} />
                           <AvatarFallback className={`text-[11px] font-semibold ${colorClass}`}>
                             {getInitials(u.username)}
                           </AvatarFallback>
                         </Avatar>
-                        {/* Online dot */}
-                        <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background${isNew ? " animate-ping-once" : ""}`} />
                       </div>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="text-xs">
@@ -182,19 +181,19 @@ export function TopNav({ onMenuClick }: TopNavProps) {
                   </TooltipContent>
                 </Tooltip>
               )}
-            </div>
+            </AvatarGroup>
           </div>
         )}
 
         <div className="relative hidden md:flex items-center">
           <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
-          <Input 
-            type="search" 
-            placeholder="Search..." 
+          <Input
+            type="search"
+            placeholder="Search..."
             className="w-64 pl-9 bg-muted/50 border-none focus-visible:ring-1 focus-visible:bg-background transition-all"
           />
         </div>
-        
+
         {/* User Swapping Dropdown for role simulation */}
         {realUser?.role === "Boss" && (
           <DropdownMenu>
@@ -210,8 +209,8 @@ export function TopNav({ onMenuClick }: TopNavProps) {
                 <DropdownMenuLabel>Simulate User Profile</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {users.map((u) => (
-                  <DropdownMenuItem 
-                    key={u.id} 
+                  <DropdownMenuItem
+                    key={u.id}
                     onClick={() => setCurrentUser(u)}
                     className="flex flex-col items-start"
                   >

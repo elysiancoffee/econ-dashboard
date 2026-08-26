@@ -2,7 +2,7 @@
 
 import { db } from "./db/client";
 import * as schema from "./db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, inArray } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
 export async function fetchInitialData() {
@@ -13,6 +13,7 @@ export async function fetchInitialData() {
         username: schema.users.username,
         role: schema.users.role,
         isOnline: schema.users.isOnline,
+        lastSeen: schema.users.lastSeen,
       })
       .from(schema.users),
     db.select().from(schema.boards),
@@ -25,10 +26,17 @@ export async function fetchInitialData() {
   return { users, boards, tasks, submissions, logs, shortcuts, notifications };
 }
 
-export async function dbAddUser(username: string, role: string, passwordInput: string) {
+export async function dbAddUser(username: string, role: string, passwordPlain: string) {
   const id = `u-${Date.now()}`;
-  const passwordHash = await bcrypt.hash(passwordInput, 10);
-  await db.insert(schema.users).values({ id, username, role, password: passwordHash });
+  const passwordHash = await bcrypt.hash(passwordPlain, 10);
+  await db.insert(schema.users).values({
+    id,
+    username,
+    password: passwordHash,
+    role,
+    isOnline: false,
+    lastSeen: null,
+  });
   return id;
 }
 
@@ -41,14 +49,92 @@ export async function dbUpdateUserRole(id: string, role: string) {
 }
 
 export async function dbSetUserOnline(id: string, online: boolean) {
-  await db.update(schema.users).set({ isOnline: online }).where(eq(schema.users.id, id));
+  const now = new Date().toISOString();
+  await db
+    .update(schema.users)
+    .set({
+      isOnline: online,
+      lastSeen: online ? now : null,
+    })
+    .where(eq(schema.users.id, id));
+}
+
+export async function dbHeartbeat(id: string) {
+  const now = new Date().toISOString();
+  await db
+    .update(schema.users)
+    .set({
+      isOnline: true,
+      lastSeen: now,
+    })
+    .where(eq(schema.users.id, id));
+}
+
+export async function dbForceUserOffline(id: string) {
+  await db
+    .update(schema.users)
+    .set({
+      isOnline: false,
+      lastSeen: null,
+    })
+    .where(eq(schema.users.id, id));
+}
+
+export async function dbForceLogoutUser(id: string) {
+  await db
+    .update(schema.users)
+    .set({
+      isOnline: false,
+      lastSeen: null,
+      sessionVersion: sql`${schema.users.sessionVersion} + 1`,
+    })
+    .where(eq(schema.users.id, id));
+}
+
+export async function dbResetAllOnlineUsers() {
+  await db
+    .update(schema.users)
+    .set({
+      isOnline: false,
+      lastSeen: null,
+    });
 }
 
 export async function fetchOnlineUsers() {
-  return db
-    .select({ id: schema.users.id, username: schema.users.username, role: schema.users.role })
+  // Threshold: active within the last 45 seconds
+  const threshold = new Date(Date.now() - 45 * 1000).toISOString();
+
+  const candidates = await db
+    .select({
+      id: schema.users.id,
+      username: schema.users.username,
+      role: schema.users.role,
+      lastSeen: schema.users.lastSeen,
+      isOnline: schema.users.isOnline,
+    })
     .from(schema.users)
     .where(eq(schema.users.isOnline, true));
+
+  const activeUsers: { id: string; username: string; role: string }[] = [];
+  const expiredIds: string[] = [];
+
+  for (const u of candidates) {
+    if (u.lastSeen && u.lastSeen >= threshold) {
+      activeUsers.push({ id: u.id, username: u.username, role: u.role });
+    } else {
+      expiredIds.push(u.id);
+    }
+  }
+
+  // Auto-clean expired sessions in background
+  if (expiredIds.length > 0) {
+    db.update(schema.users)
+      .set({ isOnline: false, lastSeen: null })
+      .where(inArray(schema.users.id, expiredIds))
+      .catch(() => {});
+  }
+
+  return activeUsers;
 }
 
 export async function dbAddBoard(name: string, allowedRoles: any, allowedUsers: any) {
@@ -195,6 +281,11 @@ export async function dbUpdateTask(task: {
 
 export async function dbDeleteTask(id: string) {
   await db.delete(schema.tasks).where(eq(schema.tasks.id, id));
+}
+
+export async function dbDeleteTasks(ids: string[]) {
+  if (!ids || ids.length === 0) return;
+  await db.delete(schema.tasks).where(inArray(schema.tasks.id, ids));
 }
 
 export async function dbAddSubmission(username: string, amount: number, notes?: string) {

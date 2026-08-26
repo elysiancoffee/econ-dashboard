@@ -9,6 +9,10 @@ import {
   dbDeleteUser,
   dbUpdateUserRole,
   dbSetUserOnline,
+  dbHeartbeat,
+  dbForceUserOffline,
+  dbForceLogoutUser,
+  dbResetAllOnlineUsers,
   fetchOnlineUsers,
   dbAddBoard,
   dbDeleteBoard,
@@ -17,6 +21,7 @@ import {
   dbAddTasks,
   dbUpdateTask,
   dbDeleteTask,
+  dbDeleteTasks,
   dbAddSubmission,
   dbAddLog,
   dbAddShortcut,
@@ -108,10 +113,14 @@ interface AppContextType {
   addTasks: (tasks: Omit<Task, "id" | "commentsCount">[]) => Promise<void>;
   updateTask: (task: Task) => void;
   deleteTask: (id: string) => void;
+  deleteTasks: (ids: string[]) => Promise<void>;
   addSubmission: (username: string, amount: number, notes?: string) => void;
   addLog: (action: string) => void;
   loginUser: (username: string, passwordInput: string) => Promise<boolean>;
   logoutUser: () => void;
+  forceUserOffline: (userId: string) => Promise<void>;
+  forceLogoutUser: (userId: string) => Promise<void>;
+  resetAllOnlinePresence: () => Promise<void>;
   addShortcut: (title: string, url: string) => void;
   deleteShortcut: (id: string) => void;
   markNotificationAsRead: (id: string) => Promise<void>;
@@ -202,6 +211,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, [realUser]);
 
+  // Heartbeat: update lastSeen every 20s while tab is active/visible
+  useEffect(() => {
+    if (!realUser) return;
+    dbHeartbeat(realUser.id).catch(console.error);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        dbHeartbeat(realUser.id).catch(console.error);
+      }
+    }, 20_000);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        dbHeartbeat(realUser.id).catch(console.error);
+        fetchOnlineUsers().then(setOnlineUsers).catch(console.error);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [realUser]);
+
   // Poll for online users every 5 seconds (skips when tab is hidden)
   useEffect(() => {
     if (!realUser) return;
@@ -277,14 +311,70 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addLog(`Switched view to @${user.username} (${user.role}).`, actor.id, actor.username);
   };
 
-  const logoutUser = () => {
+  const logoutUser = async () => {
     const u = currentUser;
-    if (realUser) dbSetUserOnline(realUser.id, false).catch(console.error);
-    addLog(`${u.username} signed out.`, u.id, u.username);
+    if (realUser) {
+      try {
+        await dbSetUserOnline(realUser.id, false);
+      } catch (err) {
+        console.error("Failed to mark user offline:", err);
+      }
+    }
+    try {
+      await addLog(`${u.username} signed out.`, u.id, u.username);
+    } catch (err) {
+      console.error("Failed to add logout log:", err);
+    }
     localStorage.removeItem("admin_simulated_user");
     localStorage.removeItem("admin_current_user");
     localStorage.removeItem("admin_real_user");
-    signOut({ callbackUrl: "/login" });
+    setRealUserState(null);
+    setCurrentUser({
+      id: "guest",
+      username: "Guest",
+      role: "Custodian",
+    });
+    hasLoggedOnline.current = false;
+    await signOut({ callbackUrl: "/login", redirect: true });
+    window.location.href = "/login";
+  };
+
+  const forceUserOffline = async (userId: string) => {
+    try {
+      await dbForceUserOffline(userId);
+      const online = await fetchOnlineUsers();
+      setOnlineUsers(online);
+      const target = users.find((u) => u.id === userId);
+      await addLog(`Boss forced @${target?.username || userId} offline.`);
+    } catch (err) {
+      console.error("Failed to force user offline:", err);
+    }
+  };
+
+  const forceLogoutUser = async (userId: string) => {
+    try {
+      await dbForceLogoutUser(userId);
+      const online = await fetchOnlineUsers();
+      setOnlineUsers(online);
+      const target = users.find((u) => u.id === userId);
+      await addLog(`Boss forced logout & revoked session for @${target?.username || userId}.`);
+    } catch (err) {
+      console.error("Failed to force logout user:", err);
+    }
+  };
+
+  const resetAllOnlinePresence = async () => {
+    try {
+      await dbResetAllOnlineUsers();
+      if (realUser) {
+        await dbHeartbeat(realUser.id);
+      }
+      const online = await fetchOnlineUsers();
+      setOnlineUsers(online);
+      await addLog("Admin reset all online presence states.");
+    } catch (err) {
+      console.error("Failed to reset online presence:", err);
+    }
   };
 
   const addUser = async (username: string, role: Role, password?: string) => {
@@ -461,6 +551,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const deleteTasks = async (ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    try {
+      await dbDeleteTasks(ids);
+      setTasks((prev) => prev.filter((t) => !ids.includes(t.id)));
+    } catch (err) {
+      console.error("Failed to delete tasks:", err);
+    }
+  };
+
   const markNotificationAsRead = async (id: string) => {
     try {
       await dbMarkNotificationAsRead(id);
@@ -568,10 +668,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addTasks,
         updateTask,
         deleteTask,
+        deleteTasks,
         addSubmission,
         addLog,
         loginUser,
         logoutUser,
+        forceUserOffline,
+        forceLogoutUser,
+        resetAllOnlinePresence,
         addShortcut,
         deleteShortcut,
         markNotificationAsRead,

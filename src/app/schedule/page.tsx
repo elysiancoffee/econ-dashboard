@@ -5,7 +5,7 @@ import { useApp } from "@/lib/store";
 import { Plus, Trash2, X, Check, ChevronDown, Palette, AlertCircle, Sparkles, RefreshCw, Share2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dbFetchTeamSchedule, dbSaveTeamSchedule } from "@/lib/actions";
-import { generateAutomatedTasks } from "@/lib/schedule-automation";
+import { generateAutomatedTasks, findDutyTasksForPeriod, isTaskMatchingDuty, isDateInPeriod } from "@/lib/schedule-automation";
 import { toast } from "sonner";
 import {
   Period,
@@ -385,7 +385,7 @@ function UserColorCustomizer({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SchedulePage() {
-  const { currentUser, users, boards, tasks, addTasks } = useApp();
+  const { currentUser, users, boards, tasks, addTasks, deleteTasks } = useApp();
   const isBoss = currentUser.role === "Boss";
 
   const [schedule, setSchedule] = useState<ScheduleData>(DEFAULT_SCHEDULE);
@@ -455,30 +455,67 @@ export default function SchedulePage() {
     schedule.assignments.find(a => a.taskId === taskId && a.periodId === periodId);
 
   const setAssignment = async (taskId: string, periodId: string, usernames: string[]) => {
+    const taskItem = schedule.tasks.find(t => t.id === taskId);
+    const period = schedule.periods.find(p => p.id === periodId);
+    const prevAssignment = getAssignment(taskId, periodId);
+    const prevUsernames = prevAssignment?.usernames ?? [];
+
     setSchedule(prev => {
       const filtered = prev.assignments.filter(a => !(a.taskId === taskId && a.periodId === periodId));
       return { ...prev, assignments: usernames.length > 0 ? [...filtered, { taskId, periodId, usernames }] : filtered };
     });
 
-    // If new assignees were added, automatically generate recurring tasks
-    if (usernames.length > 0 && isBoss) {
-      const taskItem = schedule.tasks.find(t => t.id === taskId);
-      const period = schedule.periods.find(p => p.id === periodId);
+    if (isBoss && taskItem && period) {
+      // Find all existing duty tasks for this duty and period
+      const existingDutyTasks = findDutyTasksForPeriod({
+        scheduleTaskName: taskItem.name,
+        period,
+        tasks,
+      });
 
-      if (taskItem && period) {
+      // 1. Identify users removed from this duty
+      const removedUsernames = prevUsernames.filter(u => !usernames.includes(u));
+      const removedUsers = users.filter(u => removedUsernames.includes(u.username));
+      const removedUserIds = new Set(removedUsers.map(u => u.id));
+
+      // 2. If assignees changed, determine which tasks to relieve/delete:
+      // If duty completely unassigned: relieve all non-completed tasks for this duty & period
+      // If users were removed or assignees changed: relieve non-completed tasks assigned to removed users
+      // Note: If duty distribution changes (e.g. from 1 user to 2 users or vice versa), remove all uncompleted tasks and cleanly regenerate
+      const isRedistribution = usernames.length > 0 && prevUsernames.length > 0 && (usernames.length !== prevUsernames.length || removedUsernames.length > 0);
+
+      const tasksToRelieve = existingDutyTasks.filter(t => {
+        if (t.status === "Completed") return false; // Preserve completed work
+        if (usernames.length === 0) return true; // Completely unassigned: relieve all
+        if (isRedistribution) return true; // Full redistribution: clear pending to regenerate cleanly
+        return removedUserIds.has(t.assignedUserId);
+      });
+
+      if (tasksToRelieve.length > 0) {
+        const removeIds = tasksToRelieve.map(t => t.id);
+        await deleteTasks(removeIds);
+        if (removedUsernames.length > 0) {
+          toast.info(`Relieved @${removedUsernames.join(", @")} of ${tasksToRelieve.length} duty task(s).`);
+        }
+      }
+
+      // 3. If new/current assignees are assigned, generate and add their automated duty tasks
+      if (usernames.length > 0) {
         const assignedUsers = users.filter(u => usernames.includes(u.username));
+        const remainingTasks = tasks.filter(t => !tasksToRelieve.some(r => r.id === t.id));
+
         const newAutomatedTasks = generateAutomatedTasks({
           scheduleTaskName: taskItem.name,
           period,
           assignedUsers,
-          existingTasks: tasks,
+          existingTasks: remainingTasks,
           boards,
         });
 
         if (newAutomatedTasks.length > 0) {
           try {
             await addTasks(newAutomatedTasks);
-            toast.success(`Automated ${newAutomatedTasks.length} recurring task(s) for @${usernames.join(", @")}.`);
+            toast.success(`Assigned ${newAutomatedTasks.length} recurring duty task(s) to @${usernames.join(", @")}.`);
           } catch (err) {
             console.error("Failed to generate automated tasks:", err);
           }
@@ -492,36 +529,70 @@ export default function SchedulePage() {
     setIsSyncingTasks(true);
     try {
       let totalGenerated = 0;
+      let totalRelieved = 0;
       const allNewTasks: any[] = [];
+      const allTaskIdsToDelete: string[] = [];
       let runningTasks = [...tasks];
 
-      for (const assignment of schedule.assignments) {
-        if (!assignment.usernames || assignment.usernames.length === 0) continue;
-        const taskItem = schedule.tasks.find(t => t.id === assignment.taskId);
-        const period = schedule.periods.find(p => p.id === assignment.periodId);
-        if (!taskItem || !period) continue;
+      for (const scheduleTask of schedule.tasks) {
+        for (const period of schedule.periods) {
+          const assignment = schedule.assignments.find(
+            a => a.taskId === scheduleTask.id && a.periodId === period.id
+          );
+          const assignedUsernames = assignment?.usernames ?? [];
+          const assignedUsers = users.filter(u => assignedUsernames.includes(u.username));
+          const assignedUserIds = new Set(assignedUsers.map(u => u.id));
 
-        const assignedUsers = users.filter(u => assignment.usernames.includes(u.username));
-        const newTasks = generateAutomatedTasks({
-          scheduleTaskName: taskItem.name,
-          period,
-          assignedUsers,
-          existingTasks: runningTasks,
-          boards,
-        });
+          // Find existing duty tasks for this task & period
+          const existingDutyTasks = findDutyTasksForPeriod({
+            scheduleTaskName: scheduleTask.name,
+            period,
+            tasks: runningTasks,
+          });
 
-        if (newTasks.length > 0) {
-          allNewTasks.push(...newTasks);
-          runningTasks = [...runningTasks, ...(newTasks as any)];
-          totalGenerated += newTasks.length;
+          // Relieve any uncompleted tasks belonging to users who are NO LONGER assigned
+          const outdatedTasks = existingDutyTasks.filter(
+            t => t.status !== "Completed" && !assignedUserIds.has(t.assignedUserId)
+          );
+
+          if (outdatedTasks.length > 0) {
+            const outIds = outdatedTasks.map(t => t.id);
+            allTaskIdsToDelete.push(...outIds);
+            runningTasks = runningTasks.filter(t => !outIds.includes(t.id));
+            totalRelieved += outIds.length;
+          }
+
+          // Generate missing tasks for current assigned users
+          if (assignedUsers.length > 0) {
+            const newTasks = generateAutomatedTasks({
+              scheduleTaskName: scheduleTask.name,
+              period,
+              assignedUsers,
+              existingTasks: runningTasks,
+              boards,
+            });
+
+            if (newTasks.length > 0) {
+              allNewTasks.push(...newTasks);
+              runningTasks = [...runningTasks, ...(newTasks as any)];
+              totalGenerated += newTasks.length;
+            }
+          }
         }
+      }
+
+      if (allTaskIdsToDelete.length > 0) {
+        await deleteTasks(allTaskIdsToDelete);
       }
 
       if (allNewTasks.length > 0) {
         await addTasks(allNewTasks);
-        toast.success(`Synced! Created ${totalGenerated} automated recurring task(s).`);
+      }
+
+      if (totalGenerated > 0 || totalRelieved > 0) {
+        toast.success(`Schedule synced! Created ${totalGenerated} duty task(s) and relieved ${totalRelieved} outdated task(s).`);
       } else {
-        toast.info("All tasks for the current schedule are already up to date. No duplicates needed.");
+        toast.info("All tasks for the current schedule are already up to date.");
       }
     } catch (err) {
       console.error("Sync error:", err);
@@ -539,16 +610,49 @@ export default function SchedulePage() {
     setAssignment(taskId, periodId, next);
   };
 
-  const updatePeriod = (id: string, data: Omit<Period, "id">) => {
-    setSchedule(prev => ({ ...prev, periods: prev.periods.map(p => p.id === id ? { id, ...data } : p) }));
+  const updatePeriod = async (id: string, data: Omit<Period, "id">) => {
+    const updatedPeriod: Period = { id, ...data };
+    setSchedule(prev => ({ ...prev, periods: prev.periods.map(p => p.id === id ? updatedPeriod : p) }));
     setEditingPeriodId(null);
+
+    if (isBoss) {
+      const periodAssignments = schedule.assignments.filter(a => a.periodId === id);
+      const allNew: any[] = [];
+      for (const a of periodAssignments) {
+        const taskItem = schedule.tasks.find(t => t.id === a.taskId);
+        if (taskItem && a.usernames && a.usernames.length > 0) {
+          const assignedUsers = users.filter(u => a.usernames.includes(u.username));
+          const newTasks = generateAutomatedTasks({
+            scheduleTaskName: taskItem.name,
+            period: updatedPeriod,
+            assignedUsers,
+            existingTasks: tasks,
+            boards,
+          });
+          if (newTasks.length > 0) {
+            allNew.push(...newTasks);
+          }
+        }
+      }
+      if (allNew.length > 0) {
+        await addTasks(allNew);
+        toast.success(`Updated period and created ${allNew.length} task(s) for the new date range.`);
+      }
+    }
   };
 
   const addPeriod = (data: Omit<Period, "id">) => {
     setSchedule(prev => ({ ...prev, periods: [...prev.periods, { id: `p${Date.now()}`, ...data }] }));
   };
 
-  const deletePeriod = (id: string) => {
+  const deletePeriod = async (id: string) => {
+    const period = schedule.periods.find(p => p.id === id);
+    if (period) {
+      const periodTasks = tasks.filter(t => isDateInPeriod(t.dueDate, period) && t.status !== "Completed");
+      if (periodTasks.length > 0) {
+        await deleteTasks(periodTasks.map(t => t.id));
+      }
+    }
     setSchedule(prev => ({
       ...prev,
       periods: prev.periods.filter(p => p.id !== id),
@@ -562,7 +666,14 @@ export default function SchedulePage() {
     setNewTaskName("");
   };
 
-  const deleteTask = (id: string) => {
+  const deleteTask = async (id: string) => {
+    const taskItem = schedule.tasks.find(t => t.id === id);
+    if (taskItem) {
+      const dutyTasks = tasks.filter(t => isTaskMatchingDuty(t.title, taskItem.name) && t.status !== "Completed");
+      if (dutyTasks.length > 0) {
+        await deleteTasks(dutyTasks.map(t => t.id));
+      }
+    }
     setSchedule(prev => ({
       ...prev,
       tasks: prev.tasks.filter(t => t.id !== id),
