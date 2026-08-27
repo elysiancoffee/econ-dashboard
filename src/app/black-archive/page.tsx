@@ -26,6 +26,7 @@ import {
   saveLocalBlackArchive,
 } from "@/lib/black-archive-data";
 import { dbFetchBlackArchive, dbSaveBlackArchive } from "@/lib/actions";
+import router from "next/router";
 
 export default function BlackArchivePage() {
   const { currentUser } = useApp();
@@ -192,11 +193,7 @@ export default function BlackArchivePage() {
           </p>
           <Button
             onClick={() => {
-              if (archiveData.tiers.length > 0) {
-                handleAddRow(archiveData.tiers[0].id);
-              } else {
-                handleAddTier();
-              }
+              router.push('/black-chips');
             }}
           >
             <PlusIcon /> Add New Black Chips
